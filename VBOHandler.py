@@ -1,7 +1,13 @@
-from OpenGL.GL import glGenBuffers, glGetAttribLocation, glBindBuffer, glGetUniformLocation, glBufferData, glUniformMatrix4fv, glBindVertexArray, glGenVertexArrays, glVertexAttribPointer, glEnableVertexAttribArray, glDrawElements, GL_STATIC_DRAW, GL_UNSIGNED_INT, GL_ELEMENT_ARRAY_BUFFER, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, GL_FLOAT, GL_FALSE, GL_TRIANGLES
-from errors import VBOError
-import numpy as np
 import ctypes
+
+import glm
+import numpy as np
+from OpenGL.GL import glGenBuffers, glGetAttribLocation, glBindBuffer, glGetUniformLocation, glBufferData, \
+    glUniformMatrix4fv, glBindVertexArray, glGenVertexArrays, glVertexAttribPointer, glEnableVertexAttribArray, \
+    glDrawElements, GL_STATIC_DRAW, GL_UNSIGNED_INT, GL_ELEMENT_ARRAY_BUFFER, GL_ARRAY_BUFFER, GL_FLOAT, GL_FALSE, \
+    GL_TRIANGLES
+
+from errors import VBOError
 
 
 class VBO:
@@ -48,13 +54,18 @@ class VBO:
         glEnableVertexAttribArray(color)
 
         self.uniformModel = glGetUniformLocation(shader, 'uniform_Model')
-        self.uniformView = glGetUniformLocation(shader, 'uniform_View')
-        self.uniformProjection = glGetUniformLocation(shader, 'uniform_Projection')
+        self.modelMatrix = glm.mat4(1)
 
         glBindBuffer(GL_ARRAY_BUFFER, 0)
         glBindVertexArray(0)
 
+    def move(self):
+        pass
+
     def draw(self):
+        glUniformMatrix4fv(self.uniformModel, 1, GL_FALSE,
+                           np.squeeze(self.modelMatrix))
+
         glBindVertexArray(self.VAO)
         #glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
         glDrawElements(GL_TRIANGLES, len(self.indices), GL_UNSIGNED_INT, None)
