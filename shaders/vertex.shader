@@ -18,6 +18,6 @@ void main()
 {
     mat4 lookAtMatrix = mat4(lookAtMatrix0, lookAtMatrix1, lookAtMatrix2, lookAtMatrix3);
 
-    gl_Position = uniform_Projection * uniform_View * uniform_Model * (vec4(worldPosition, 1) + lookAtMatrix * vec4(vertexPosition,1));
+    gl_Position = uniform_Projection * uniform_View * uniform_Model * (vec4(worldPosition, 1) + (lookAtMatrix * vec4(vertexPosition,1)));
     newColor = color;
 }

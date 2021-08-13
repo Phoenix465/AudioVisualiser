@@ -13,7 +13,6 @@ import GameObjects
 import ShaderLoader
 import gamePaths
 from degreesMath import *
-from vector import *
 
 
 #  ffmpeg -i "No.1 - Kobasolo.mp3" "No.1 - Kobasolo2.wav"
@@ -26,7 +25,7 @@ def main():
     GamePaths = gamePaths.PathHolder()
 
     display = 1366, 768
-    displayV = Vector2(*display)
+    displayV = glm.vec2(display)
 
     screen = pygame.display.set_mode(display, DOUBLEBUF | OPENGL)
 
@@ -49,7 +48,7 @@ def main():
 
     glMatrixMode(GL_PROJECTION)
     #gluPerspective(70, (displayV.X / displayV.Y), 0.1, 128.0)
-    glViewport(0, 0, displayV.X, displayV.Y)
+    glViewport(0, 0, int(displayV.x), int(displayV.y))
     glMatrixMode(GL_MODELVIEW)
 
     glEnable(GL_DEPTH_TEST)
@@ -63,13 +62,13 @@ def main():
 
     # ----- Camera Settings -----
     cameraRadius = 7
-    cameraPos = Vector3(0, 0, cameraRadius)
-    cameraFront = Vector3(0, 0, 0)
-    cameraUp = Vector3(0, 1, 0)
+    cameraPos = glm.vec3(0, 0, cameraRadius)
+    cameraFront = glm.vec3(0, 0, 0)
+    cameraUp = glm.vec3(0, 1, 0)
     rotationAngle = 0
 
     # ----- Matrix Info -----
-    projectionMatrix = glm.perspective(70, displayV.X/displayV.Y, 1, 500.0)
+    projectionMatrix = glm.perspective(70, displayV.x/displayV.y, 1, 500.0)
     modelMatrix = glm.mat4(1)
 
     glUniformMatrix4fv(uniformModel, 1, GL_FALSE,
@@ -116,11 +115,11 @@ def main():
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         rotationAngle += deltaT / 1000 * 45
-        cameraPos = Vector3(sin(rotationAngle) * cameraRadius, 0, cos(rotationAngle) * cameraRadius)
+        cameraPos = glm.vec3(sin(rotationAngle) * cameraRadius, 0, cos(rotationAngle) * cameraRadius)
 
-        viewMatrix = glm.lookAt(cameraPos.tuple,
-                                cameraFront.tuple,
-                                cameraUp.tuple)
+        viewMatrix = glm.lookAt(cameraPos,
+                                cameraFront,
+                                cameraUp)
 
         glUniformMatrix4fv(uniformView, 1, GL_FALSE,
                            glm.value_ptr(viewMatrix))

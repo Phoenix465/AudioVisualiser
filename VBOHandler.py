@@ -8,76 +8,6 @@ from OpenGL.GL import glGenBuffers, glGetAttribLocation, glBindBuffer, glBufferD
     GL_FLOAT, GL_FALSE, \
     GL_TRIANGLES
 
-"""class VBOParticle:
-    def __init__(self, shader, vertices, colours):
-        if len(vertices) != len(colours):
-            raise VBOError("Length of Vertices Doesn't Match Length of Colours")
-
-        self.vertices, self.colours = vertices, colours
-
-        self.polygon = self.generatePolygon()
-
-        indices = []
-        for i in range(len(vertices)-2):
-            indices.extend([
-                0,
-                i+1,
-                i+2
-            ])
-
-        self.indices = np.array(indices, dtype=np.uint32)
-
-        self.VAO = glGenVertexArrays(1)
-        self.VBOParticle = glGenBuffers(1)
-        self.EBO = glGenBuffers(1)
-
-        glBindVertexArray(self.VAO)
-
-        glBindBuffer(GL_ARRAY_BUFFER, self.VBOParticle)
-        glBufferData(GL_ARRAY_BUFFER, 4 * len(self.polygon), self.polygon, GL_DYNAMIC_DRAW)
-
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, 4 * len(self.indices), self.indices, GL_STATIC_DRAW)
-
-        stride = (3 + 4) * 4  # 3 for xyz and 4 for RGBA
-
-        position = glGetAttribLocation(shader, "position")
-        glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(0))
-        glEnableVertexAttribArray(position)
-
-        color = glGetAttribLocation(shader, "color")
-        glVertexAttribPointer(color, 4, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(3*4))
-        glEnableVertexAttribArray(color)
-
-        self.uniformModel = glGetUniformLocation(shader, 'uniform_Model')
-        self.modelMatrix = glm.mat4(1)
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0)
-        glBindVertexArray(0)
-
-    def generatePolygon(self):
-        polygon = []
-        for vertex, colour in zip(self.vertices, self.colours):
-            polygon.extend(vertex.list + colour.RGBAList)
-
-        return np.array(polygon, dtype=np.float32)
-
-    def draw(self):
-        glUniformMatrix4fv(self.uniformModel, 1, GL_FALSE,
-                           np.squeeze(self.modelMatrix))
-
-        glBindVertexArray(self.VAO)
-        #glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
-        glDrawElements(GL_TRIANGLES, len(self.indices), GL_UNSIGNED_INT, None)
-        glBindVertexArray(0)
-
-    def delete(self):
-        if hasattr(self, "vao"):
-            del self.vao
-
-        if hasattr(self, "vbo"):
-            del self.vbo"""
-
 
 class VBOParticle:
     def __init__(self, shader, vertices, particles):
@@ -155,10 +85,10 @@ class VBOParticle:
         glBindBuffer(GL_ARRAY_BUFFER, 0)
         glBindVertexArray(0)
 
-    def update(self, cameraPos):
+    def update(self, cameraAngle):
         glBindVertexArray(self.VAO)
 
-        self.particleData = self.serializeParticles(cameraPos)
+        self.particleData = self.serializeParticles(cameraAngle)
 
         glBindBuffer(GL_ARRAY_BUFFER, self.PBO)
         glBufferSubData(GL_ARRAY_BUFFER, 0, len(self.particleData) * 4, self.particleData)
@@ -171,20 +101,20 @@ class VBOParticle:
         glBindVertexArray(0)
 
     def serializeParticles(self, cameraAngle):
+        lookMatrix = glm.mat4(1)
+        lookMatrix = glm.rotate(lookMatrix, glm.radians(cameraAngle), (0, 1, 0))
+        lookMatrix = lookMatrix.to_list()
+        lookMatrixCombined = lookMatrix[0] + lookMatrix[1] + lookMatrix[2] + lookMatrix[3]
+
         particleData = []
         for particle in self.particles:
-            lookMatrix = glm.mat4(1)
-
-            lookMatrix = glm.rotate(lookMatrix, glm.radians(cameraAngle), (0, 1, 0))
-            lookMatrix = lookMatrix.to_list()
-
-            particleData.extend(particle.position.list + particle.color.RGBAList + lookMatrix[0] + lookMatrix[1] + lookMatrix[2] + lookMatrix[3])
+            particleData.extend(particle.position.to_list() + particle.color.RGBAList + lookMatrixCombined)
 
         return np.array(particleData, dtype=np.float32)
 
     def generatePolygon(self):
         polygon = []
         for vertex in self.vertices:
-            polygon.extend(vertex.list)
+            polygon.extend(vertex.to_list())
 
         return np.array(polygon, dtype=np.float32)
