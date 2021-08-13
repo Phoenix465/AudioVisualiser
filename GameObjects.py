@@ -19,7 +19,7 @@ class ParticleEmitter:
 
     def __init__(self, shader):
         self.circleRadius = 0.05
-        self.particleCount = 1000
+        self.particleCount = 2000
 
         self.circleSides = 45
         self.circleVertices = []
@@ -46,7 +46,11 @@ class ParticleEmitter:
             
         self.VBO = VBOHandler.VBOParticle(shader, self.circleVertices, self.particles)
 
-    def update(self, cameraAngle):
+    def update(self, deltaT, cameraAngle, push=False):
+        if push:
+            for particle in self.particles:
+                particle.position += glm.normalize(particle.position) * 0.2 * deltaT / 1000
+
         self.VBO.update(cameraAngle)
 
     def draw(self):

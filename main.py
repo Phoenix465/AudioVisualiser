@@ -76,8 +76,8 @@ def main():
 
     glUniformMatrix4fv(uniformProjection, 1, GL_FALSE,
                        glm.value_ptr(projectionMatrix))
-    # ---- Temp ----
-    tempObj = GameObjects.ParticleEmitter(shader)
+    # ---- Particle Emitter ----
+    particleEmitterObject = GameObjects.ParticleEmitter(shader)
 
     # ---- Sound Stuff -----
     chunkSize = 1024
@@ -86,7 +86,6 @@ def main():
     pyAudioObj = pyaudio.PyAudio()
 
     frequencyRange = 1.0 * np.arange(chunkSize) / chunkSize * soundFile.getframerate()
-    #print(frequencyRange, len(frequencyRange))
 
     soundStream = pyAudioObj.open(
         format=pyaudio.get_format_from_width(soundFile.getsampwidth()),
@@ -124,8 +123,8 @@ def main():
         glUniformMatrix4fv(uniformView, 1, GL_FALSE,
                            glm.value_ptr(viewMatrix))
 
-        tempObj.update(rotationAngle)
-        tempObj.draw()
+        particleEmitterObject.update(deltaT, rotationAngle)
+        particleEmitterObject.draw()
 
         fps = str(floor(clock.get_fps()))
 
