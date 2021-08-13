@@ -1,14 +1,8 @@
-import struct
-from math import floor
-
-import struct
 import wave
 from math import floor
-from random import random
 from time import time
 
-import \
-    glm  # If Window doesn't draw anything it's likely you installed PyGLM > 2.22, however only 1.99.3 works (only tested this)
+import glm
 import numpy as np
 import pyaudio
 import pygame
@@ -75,27 +69,16 @@ def main():
     rotationAngle = 0
 
     # ----- Matrix Info -----
-    projectionMatrix = glm.perspective(70, displayV.X/displayV.Y, 1, 1000.0)
+    projectionMatrix = glm.perspective(70, displayV.X/displayV.Y, 1, 500.0)
     modelMatrix = glm.mat4(1)
 
     glUniformMatrix4fv(uniformModel, 1, GL_FALSE,
-                       np.squeeze(modelMatrix))
+                       glm.value_ptr(modelMatrix))
+
     glUniformMatrix4fv(uniformProjection, 1, GL_FALSE,
-                       np.squeeze(projectionMatrix))
-
-    # Temp Object Set-Up
-    newCircle = GameObjects.Circle(shader, Vector3(0, 0, 0), 0.05 , 45)
-
-    newCircle2 = GameObjects.Circle(shader, Vector3(0, 0.8, 0.2), 0.05, 45)
-
-    gameObjectHolder = GameObjects.GameObjectHolder()
-    gameObjectHolder.addObject(newCircle)
-    gameObjectHolder.addObject(newCircle2)
-
-    for _ in range(200):
-        gameObjectHolder.addObject(
-            GameObjects.Circle(shader, Vector3(random()*3-1.5, random()*3-1.5, random()*3-1.5), 0.05, 45)
-        )
+                       glm.value_ptr(projectionMatrix))
+    # ---- Temp ----
+    tempObj = GameObjects.ParticleEmitter(shader)
 
     # ---- Sound Stuff -----
     chunkSize = 1024
@@ -104,8 +87,7 @@ def main():
     pyAudioObj = pyaudio.PyAudio()
 
     frequencyRange = 1.0 * np.arange(chunkSize) / chunkSize * soundFile.getframerate()
-    print(frequencyRange, len(frequencyRange))
-    maxY = 2.0 ** (pyAudioObj.get_sample_size(pyaudio.paInt16) * 8 - 1)
+    #print(frequencyRange, len(frequencyRange))
 
     soundStream = pyAudioObj.open(
         format=pyaudio.get_format_from_width(soundFile.getsampwidth()),
@@ -141,44 +123,10 @@ def main():
                                 cameraUp.tuple)
 
         glUniformMatrix4fv(uniformView, 1, GL_FALSE,
-                           np.squeeze(viewMatrix))
+                           glm.value_ptr(viewMatrix))
 
-        if len(soundData) > 0 and False:
-            #  http://www.williamvennes.com/beat-detection.html
-
-            soundData = soundFile.readframes(chunkSize)
-            soundStream.write(soundData)
-
-            channelsData = np.array(struct.unpack("%dh" % (chunkSize * 2), soundData)) / maxY
-
-            channelsDataAmplitudeL = np.fft.fft(channelsData[::2], chunkSize)
-            channelsDataAmplitudeR = np.fft.fft(channelsData[1::2], chunkSize)
-
-            soundAmplitudeBuffer = channelsDataAmplitudeL + channelsDataAmplitudeR  # Adds Two arrays element-wise.
-            soundAmplitudeBuffer = abs(soundAmplitudeBuffer)
-
-            #nstantEnergyBuffer = (32/1024) * np.sum(soundAmplitudeBuffer.reshape(-1, 32), axis=1)  # Splits Array into 32 sets of 32 and sums each set (entire thing just averages)
-            instantEnergyBuffer = np.average(soundAmplitudeBuffer.reshape(-1, 32), axis=1)
-
-            if all(instantEnergyBuffer != 0):
-                #print(1, instantEnergyBuffer[0])
-                soundEnergyHistoryBuffer = np.roll(soundEnergyHistoryBuffer, 1, axis=1)
-                soundEnergyHistoryBuffer[:, 0] = instantEnergyBuffer
-
-                averageSoundEnergyHistory = np.average(soundEnergyHistoryBuffer, axis=1)
-                #print(averageSoundEnergyHistory[0], instantEnergyBuffer[0])
-                #print(2, averageSoundEnergyHistory[0])
-                beatBooleanMask = instantEnergyBuffer > averageSoundEnergyHistory * 1.25
-
-                if beatBooleanMask[0]:
-                    tempCircle = GameObjects.Circle(shader, Vector3(random()*4-2, random()*4-2, random()*4-2), 0.05, 45)
-                    gameObjectHolder.addObject(tempCircle)
-                    print("BEAT")
-
-                #print(channelsDataAmplitudeL[20], channelsDataAmplitudeR[20])
-
-        gameObjectHolder.orderObjects(cameraPos)
-        gameObjectHolder.draw()
+        tempObj.update(rotationAngle)
+        tempObj.draw()
 
         fps = str(floor(clock.get_fps()))
 

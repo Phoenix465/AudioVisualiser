@@ -1,62 +1,52 @@
-import colorsys
+from dataclasses import dataclass
+from random import random
+
+import VBOHandler
+from colour import *
 from degreesMath import *
 from vector import *
-from colour import *
-import VBOHandler
 
 
-class Circle:
-    def __init__(self, shader, centre, radius, edgeCount):
-        self.vertices = []
-        self.colours = []
+class ParticleEmitter:
+    @dataclass
+    class Particle:
+        position: Vector3
+        color: Colour
+        lifetime: float
+        size: Vector3
+        rotation: float
 
-        for i in range(edgeCount):
-            angle = i/edgeCount * 360
+    def __init__(self, shader):
+        self.circleRadius = 0.05
+        self.particleCount = 1000
 
-            width = sin(angle) * radius
-            height = cos(angle) * radius
+        self.circleSides = 45
+        self.circleVertices = []
+        for i in range(self.circleSides):
+            angle = i/self.circleSides * 360
+            width = sin(angle) * self.circleRadius
+            height = cos(angle) * self.circleRadius
 
-            self.vertices.append(
-                Vector3(width, height, 0) + centre
+            self.circleVertices.append(
+                Vector3(width, height, 0)
             )
 
-            self.colours.append(
-                Colour(*colorsys.hsv_to_rgb(i/edgeCount, 1, 1), alpha=0.5)
+        self.particles = []
+        for i in range(self.particleCount):
+            self.particles.append(
+                self.Particle(
+                    position=Vector3(random() - 0.5, random() - 0.5, random() - 0.5) * 4,
+                    size=Vector3(0.05, 0.05, 0.05),
+                    color=Colour(random(), random(), random(), alpha=.5),
+                    rotation=random() * 360,
+                    lifetime=500
+                )
             )
+            
+        self.VBO = VBOHandler.VBOParticle(shader, self.circleVertices, self.particles)
 
-        self.VBO = VBOHandler.VBO(shader, self.vertices, self.colours)
-        self.shader, self.centre, self.radius, self.edgeCount = shader, centre, radius, edgeCount
-
-    def closestVertex(self, pos):
-        tempVertices = sorted(self.vertices, key=lambda vertexPos: (vertexPos - pos).magnitude)
-        print(tempVertices[0])
-        return tempVertices[0]
+    def update(self, cameraAngle):
+        self.VBO.update(cameraAngle)
 
     def draw(self):
         self.VBO.draw()
-
-
-class GameObjectHolder:
-    def __init__(self):
-        self.objects = []
-        self.objectOrderIndex = []
-
-    def addObject(self, object):
-        if object not in self.objects:
-            self.objects.append(object)
-            self.objectOrderIndex.append(len(self.objects) - 1)
-
-    def removeObject(self, object):
-        if object in self.objects:
-            objectIndex = self.objects.index(object)
-
-            del self.objects[objectIndex]
-
-            self.objectOrderIndex = [index for index in self.objectOrderIndex if index != objectIndex]
-
-    def orderObjects(self, cameraPos):
-        self.objectOrderIndex.sort(key=lambda index: (self.objects[index].centre - cameraPos).magnitude, reverse=True)
-
-    def draw(self):
-        for index in self.objectOrderIndex:
-            self.objects[index].draw()
