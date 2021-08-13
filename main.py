@@ -1,3 +1,4 @@
+import struct
 import wave
 from math import floor
 from time import time
@@ -68,7 +69,7 @@ def main():
     rotationAngle = 0
 
     # ----- Matrix Info -----
-    projectionMatrix = glm.perspective(70, displayV.x/displayV.y, 1, 500.0)
+    projectionMatrix = glm.perspective(70, displayV.x/displayV.y, 1, 1000.0)
     modelMatrix = glm.mat4(1)
 
     glUniformMatrix4fv(uniformModel, 1, GL_FALSE,
@@ -81,11 +82,14 @@ def main():
 
     # ---- Sound Stuff -----
     chunkSize = 1024
+    groupCount = 32
 
     soundFile = wave.open(GamePaths.songPath, "rb")
     pyAudioObj = pyaudio.PyAudio()
 
     frequencyRange = 1.0 * np.arange(chunkSize) / chunkSize * soundFile.getframerate()
+    print("Frequency Range", frequencyRange[:64], frequencyRange[16], frequencyRange[32], frequencyRange[64], frequencyRange[32*7])
+    maxY = 2.0 ** (pyAudioObj.get_sample_size(pyaudio.paInt16) * 8 - 1)
 
     soundStream = pyAudioObj.open(
         format=pyaudio.get_format_from_width(soundFile.getsampwidth()),
@@ -94,7 +98,7 @@ def main():
         output=True
     )
 
-    soundEnergyHistoryBuffer = np.full((32, 45), 30)
+    soundEnergyHistoryBuffer = np.full((groupCount, 45), 30)
 
     soundData = [0]
 
@@ -113,7 +117,7 @@ def main():
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-        rotationAngle += deltaT / 1000 * 45
+        rotationAngle += deltaT / 1000 * 10
         cameraPos = glm.vec3(sin(rotationAngle) * cameraRadius, 0, cos(rotationAngle) * cameraRadius)
 
         viewMatrix = glm.lookAt(cameraPos,
@@ -123,7 +127,42 @@ def main():
         glUniformMatrix4fv(uniformView, 1, GL_FALSE,
                            glm.value_ptr(viewMatrix))
 
-        particleEmitterObject.update(deltaT, rotationAngle)
+        beat = False
+
+        if len(soundData) > 0:
+            #  http://www.williamvennes.com/beat-detection.html
+
+            soundData = soundFile.readframes(chunkSize)
+            soundStream.write(soundData)
+
+            channelsData = np.array(struct.unpack("%dh" % (chunkSize * 2), soundData))
+
+            channelsDataAmplitudeL = np.fft.fft(channelsData[::2], chunkSize)
+            channelsDataAmplitudeR = np.fft.fft(channelsData[1::2], chunkSize)
+
+            soundAmplitudeBuffer = channelsDataAmplitudeL + channelsDataAmplitudeR  # Adds Two arrays element-wise.
+            soundAmplitudeBuffer = abs(soundAmplitudeBuffer)
+
+            #nstantEnergyBuffer = (32/1024) * np.sum(soundAmplitudeBuffer.reshape(-1, 32), axis=1)  # Splits Array into 32 sets of 32 and sums each set (entire thing just averages)
+            instantEnergyBuffer = np.average(soundAmplitudeBuffer.reshape(-1, chunkSize//groupCount), axis=1)
+
+            if all(instantEnergyBuffer != 0):
+                #print(1, instantEnergyBuffer[0])
+                soundEnergyHistoryBuffer = np.roll(soundEnergyHistoryBuffer, 1, axis=1)
+                soundEnergyHistoryBuffer[:, 0] = instantEnergyBuffer
+
+                averageSoundEnergyHistory = np.average(soundEnergyHistoryBuffer, axis=1)
+                #print(averageSoundEnergyHistory[0], instantEnergyBuffer[0])
+                #print(2, averageSoundEnergyHistory[0])
+                beatBooleanMask = instantEnergyBuffer > averageSoundEnergyHistory * 5
+
+                if any(beatBooleanMask):
+                    beat = True
+
+                #print(channelsDataAmplitudeL[20], channelsDataAmplitudeR[20])
+
+        particleEmitterObject.update(deltaT, rotationAngle, push=beat)
+        particleEmitterObject.sort(cameraPos)
         particleEmitterObject.draw()
 
         fps = str(floor(clock.get_fps()))

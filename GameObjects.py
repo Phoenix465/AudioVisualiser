@@ -14,19 +14,21 @@ class ParticleEmitter:
         position: glm.vec3
         color: Colour
         lifetime: float
-        size: glm.vec3
+        scale: float
+        scaleMinLimit: float
+        scaleDownVelocityPS: float
+        scaleBeatJump: float
         rotation: float
 
     def __init__(self, shader):
-        self.circleRadius = 0.05
         self.particleCount = 2000
 
-        self.circleSides = 45
+        self.circleSides = 100
         self.circleVertices = []
         for i in range(self.circleSides):
             angle = i/self.circleSides * 360
-            width = sin(angle) * self.circleRadius
-            height = cos(angle) * self.circleRadius
+            width = sin(angle)
+            height = cos(angle)
 
             self.circleVertices.append(
                 glm.vec3(width, height, 0)
@@ -37,7 +39,10 @@ class ParticleEmitter:
             self.particles.append(
                 self.Particle(
                     position=glm.vec3(random() - 0.5, random() - 0.5, random() - 0.5) * 4,
-                    size=glm.vec3(0.05, 0.05, 0.05),
+                    scale=0.05,
+                    scaleMinLimit=0.05,
+                    scaleDownVelocityPS=0.1,
+                    scaleBeatJump=0.01,
                     color=Colour(random(), random(), random(), alpha=.5),
                     rotation=random() * 360,
                     lifetime=500
@@ -46,10 +51,20 @@ class ParticleEmitter:
             
         self.VBO = VBOHandler.VBOParticle(shader, self.circleVertices, self.particles)
 
+    def sort(self, cameraPos):
+        self.particles = sorted(self.particles, key=lambda particle: glm.length(particle.position-cameraPos), reverse=True)
+        self.VBO.particles = self.particles
+
     def update(self, deltaT, cameraAngle, push=False):
-        if push:
-            for particle in self.particles:
-                particle.position += glm.normalize(particle.position) * 0.2 * deltaT / 1000
+        for particle in self.particles:
+            particle.scale -= particle.scaleDownVelocityPS * deltaT / 1000
+
+            if push:
+                particle.scale += particle.scaleBeatJump
+
+            particle.scale = max(particle.scaleMinLimit, particle.scale)
+
+            #particle.position += glm.normalize(particle.position) * 0.05
 
         self.VBO.update(cameraAngle)
 

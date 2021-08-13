@@ -44,7 +44,7 @@ class VBOParticle:
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, 4 * len(self.indices), self.indices, GL_STATIC_DRAW)
 
         self.vertexStride = 3 * 4
-        self.particleStride = (3 + 4 + 4 + 4 + 4 + 4) * 4
+        self.particleStride = (3 + 4 + 1 + 4 + 4 + 4 + 4) * 4
 
         self.vertexPositionLocation = glGetAttribLocation(shader, "vertexPosition")
         glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
@@ -62,23 +62,28 @@ class VBOParticle:
         glVertexAttribDivisor(self.colorLocation, 1)
         glEnableVertexAttribArray(self.colorLocation)
 
+        self.scaleLocation = glGetAttribLocation(shader, "scale")
+        glVertexAttribPointer(self.scaleLocation, 1, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4) * 4))
+        glVertexAttribDivisor(self.scaleLocation, 1)
+        glEnableVertexAttribArray(self.scaleLocation)
+
         self.lookAtMatrix0Location = glGetAttribLocation(shader, "lookAtMatrix0")
-        glVertexAttribPointer(self.lookAtMatrix0Location, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4) * 4))
+        glVertexAttribPointer(self.lookAtMatrix0Location, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+1) * 4))
         glVertexAttribDivisor(self.lookAtMatrix0Location, 1)
         glEnableVertexAttribArray(self.lookAtMatrix0Location)
 
         self.lookAtMatrix1Location = glGetAttribLocation(shader, "lookAtMatrix1")
-        glVertexAttribPointer(self.lookAtMatrix1Location, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+4)*4))
+        glVertexAttribPointer(self.lookAtMatrix1Location, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+1+4)*4))
         glVertexAttribDivisor(self.lookAtMatrix1Location, 1)
         glEnableVertexAttribArray(self.lookAtMatrix1Location)
 
         self.lookAtMatrix2Location = glGetAttribLocation(shader, "lookAtMatrix2")
-        glVertexAttribPointer(self.lookAtMatrix2Location, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+4+4)*4))
+        glVertexAttribPointer(self.lookAtMatrix2Location, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+1+4+4)*4))
         glVertexAttribDivisor(self.lookAtMatrix2Location, 1)
         glEnableVertexAttribArray(self.lookAtMatrix2Location)
 
         self.lookAtMatrix3Location = glGetAttribLocation(shader, "lookAtMatrix3")
-        glVertexAttribPointer(self.lookAtMatrix3Location, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+4+4+4)*4))
+        glVertexAttribPointer(self.lookAtMatrix3Location, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+1+4+4+4)*4))
         glVertexAttribDivisor(self.lookAtMatrix3Location, 1)
         glEnableVertexAttribArray(self.lookAtMatrix3Location)
 
@@ -108,7 +113,7 @@ class VBOParticle:
 
         particleData = []
         for particle in self.particles:
-            particleData.extend(particle.position.to_list() + particle.color.RGBAList + lookMatrixCombined)
+            particleData.extend(particle.position.to_list() + particle.color.RGBAList + [particle.scale] + lookMatrixCombined)
 
         return np.array(particleData, dtype=np.float32)
 
