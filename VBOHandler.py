@@ -2,24 +2,20 @@ import ctypes
 
 import glm
 import numpy as np
-from OpenGL.GL import glGenBuffers, glGetAttribLocation, glBindBuffer, glGetUniformLocation, glBufferData, \
-    glUniformMatrix4fv, glBindVertexArray, glGenVertexArrays, glVertexAttribPointer, glEnableVertexAttribArray, \
-    glDrawElements, GL_STATIC_DRAW, GL_UNSIGNED_INT, GL_ELEMENT_ARRAY_BUFFER, GL_ARRAY_BUFFER, GL_FLOAT, GL_FALSE, \
+from OpenGL.GL import glGenBuffers, glGetAttribLocation, glBindBuffer, glBufferData, glDrawElementsInstanced, \
+    glBindVertexArray, glGenVertexArrays, glVertexAttribPointer, glBufferSubData, glEnableVertexAttribArray, \
+    glVertexAttribDivisor, GL_STATIC_DRAW, GL_DYNAMIC_DRAW, GL_UNSIGNED_INT, GL_ELEMENT_ARRAY_BUFFER, GL_ARRAY_BUFFER, \
+    GL_FLOAT, GL_FALSE, \
     GL_TRIANGLES
 
-from errors import VBOError
 
+class VBOParticle:
+    def __init__(self, shader, vertices, particles):
+        self.vertices = vertices
+        self.particles = particles
+        self.particleData = self.serializeParticles(0)
 
-class VBO:
-    def __init__(self, shader, vertices, colours):
-        if len(vertices) != len(colours):
-            raise VBOError("Length of Vertices Doesn't Match Length of Colours")
-
-        polygon = []
-        for vertex, colour in zip(vertices, colours):
-            polygon.extend(vertex.list + colour.RGBAList)
-
-        self.polygon = np.array(polygon, dtype=np.float32)
+        self.polygon = self.generatePolygon()
 
         indices = []
         for i in range(len(vertices)-2):
@@ -32,49 +28,93 @@ class VBO:
         self.indices = np.array(indices, dtype=np.uint32)
 
         self.VAO = glGenVertexArrays(1)
-        self.VBO = glGenBuffers(1)
-        self.EBO = glGenBuffers(1)
+        self.VBO = glGenBuffers(1)  # Vertex Buffer Object
+        self.PBO = glGenBuffers(1)  # Position Buffer Object
+        self.EBO = glGenBuffers(1)  # Element Buffer Object
 
         glBindVertexArray(self.VAO)
 
         glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
         glBufferData(GL_ARRAY_BUFFER, 4 * len(self.polygon), self.polygon, GL_STATIC_DRAW)
 
+        glBindBuffer(GL_ARRAY_BUFFER, self.PBO)
+        glBufferData(GL_ARRAY_BUFFER, 4 * len(self.particleData), self.particleData, GL_DYNAMIC_DRAW)
+
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, 4 * len(self.indices), self.indices, GL_STATIC_DRAW)
 
-        stride = (3 + 4) * 4  # 3 for xyz and 4 for RGBA
+        self.vertexStride = 3 * 4
+        self.particleStride = (3 + 4 + 4 + 4 + 4 + 4) * 4
 
-        position = glGetAttribLocation(shader, "position")
-        glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(0))
-        glEnableVertexAttribArray(position)
+        self.vertexPositionLocation = glGetAttribLocation(shader, "vertexPosition")
+        glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
+        glVertexAttribPointer(self.vertexPositionLocation, 3, GL_FLOAT, GL_FALSE, self.vertexStride, ctypes.c_void_p(0))
+        glEnableVertexAttribArray(self.vertexPositionLocation)
 
-        color = glGetAttribLocation(shader, "color")
-        glVertexAttribPointer(color, 4, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(3*4))
-        glEnableVertexAttribArray(color)
+        self.worldPositionLocation = glGetAttribLocation(shader, "worldPosition")
+        glBindBuffer(GL_ARRAY_BUFFER, self.PBO)
+        glVertexAttribPointer(self.worldPositionLocation, 3, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p(0))
+        glVertexAttribDivisor(self.worldPositionLocation, 1)
+        glEnableVertexAttribArray(self.worldPositionLocation)
 
-        self.uniformModel = glGetUniformLocation(shader, 'uniform_Model')
-        self.modelMatrix = glm.mat4(1)
+        self.colorLocation = glGetAttribLocation(shader, "color")
+        glVertexAttribPointer(self.colorLocation, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p(3 * 4))
+        glVertexAttribDivisor(self.colorLocation, 1)
+        glEnableVertexAttribArray(self.colorLocation)
+
+        self.lookAtMatrix0Location = glGetAttribLocation(shader, "lookAtMatrix0")
+        glVertexAttribPointer(self.lookAtMatrix0Location, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4) * 4))
+        glVertexAttribDivisor(self.lookAtMatrix0Location, 1)
+        glEnableVertexAttribArray(self.lookAtMatrix0Location)
+
+        self.lookAtMatrix1Location = glGetAttribLocation(shader, "lookAtMatrix1")
+        glVertexAttribPointer(self.lookAtMatrix1Location, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+4)*4))
+        glVertexAttribDivisor(self.lookAtMatrix1Location, 1)
+        glEnableVertexAttribArray(self.lookAtMatrix1Location)
+
+        self.lookAtMatrix2Location = glGetAttribLocation(shader, "lookAtMatrix2")
+        glVertexAttribPointer(self.lookAtMatrix2Location, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+4+4)*4))
+        glVertexAttribDivisor(self.lookAtMatrix2Location, 1)
+        glEnableVertexAttribArray(self.lookAtMatrix2Location)
+
+        self.lookAtMatrix3Location = glGetAttribLocation(shader, "lookAtMatrix3")
+        glVertexAttribPointer(self.lookAtMatrix3Location, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+4+4+4)*4))
+        glVertexAttribDivisor(self.lookAtMatrix3Location, 1)
+        glEnableVertexAttribArray(self.lookAtMatrix3Location)
 
         glBindBuffer(GL_ARRAY_BUFFER, 0)
         glBindVertexArray(0)
 
-    def move(self):
-        pass
-
-    def draw(self):
-        glUniformMatrix4fv(self.uniformModel, 1, GL_FALSE,
-                           np.squeeze(self.modelMatrix))
-
+    def update(self, cameraAngle):
         glBindVertexArray(self.VAO)
-        #glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
-        glDrawElements(GL_TRIANGLES, len(self.indices), GL_UNSIGNED_INT, None)
+
+        self.particleData = self.serializeParticles(cameraAngle)
+
+        glBindBuffer(GL_ARRAY_BUFFER, self.PBO)
+        glBufferSubData(GL_ARRAY_BUFFER, 0, len(self.particleData) * 4, self.particleData)
+
         glBindVertexArray(0)
 
-    def delete(self):
-        if hasattr(self, "vao"):
-            del self.vao
+    def draw(self):
+        glBindVertexArray(self.VAO)
+        glDrawElementsInstanced(GL_TRIANGLES, len(self.indices), GL_UNSIGNED_INT, None, len(self.particles))
+        glBindVertexArray(0)
 
-        if hasattr(self, "vbo"):
-            del self.vbo
+    def serializeParticles(self, cameraAngle):
+        lookMatrix = glm.mat4(1)
+        lookMatrix = glm.rotate(lookMatrix, glm.radians(cameraAngle), (0, 1, 0))
+        lookMatrix = lookMatrix.to_list()
+        lookMatrixCombined = lookMatrix[0] + lookMatrix[1] + lookMatrix[2] + lookMatrix[3]
 
+        particleData = []
+        for particle in self.particles:
+            particleData.extend(particle.position.to_list() + particle.color.RGBAList + lookMatrixCombined)
+
+        return np.array(particleData, dtype=np.float32)
+
+    def generatePolygon(self):
+        polygon = []
+        for vertex in self.vertices:
+            polygon.extend(vertex.to_list())
+
+        return np.array(polygon, dtype=np.float32)
