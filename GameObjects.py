@@ -16,6 +16,7 @@ class ParticleEmitter:
         lifetime: float
         scale: float
         scaleMinLimit: float
+        scaleMaxLimit: float
         scaleDownVelocityPS: float
         scaleBeatJump: float
         rotation: float
@@ -41,8 +42,9 @@ class ParticleEmitter:
                     position=glm.vec3(random() - 0.5, random() - 0.5, random() - 0.5) * 4,
                     scale=0.05,
                     scaleMinLimit=0.05,
-                    scaleDownVelocityPS=0.1,
-                    scaleBeatJump=0.01,
+                    scaleMaxLimit=1,
+                    scaleDownVelocityPS=1,
+                    scaleBeatJump=0.05,
                     color=Colour(random(), random(), random(), alpha=.5),
                     rotation=random() * 360,
                     lifetime=500
@@ -63,6 +65,7 @@ class ParticleEmitter:
                 particle.scale += particle.scaleBeatJump
 
             particle.scale = max(particle.scaleMinLimit, particle.scale)
+            particle.scale = min(particle.scaleMaxLimit, particle.scale)
 
             #particle.position += glm.normalize(particle.position) * 0.05
 

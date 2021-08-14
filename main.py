@@ -1,4 +1,3 @@
-import struct
 import wave
 from math import floor
 from time import time
@@ -12,6 +11,7 @@ from pygame import DOUBLEBUF, OPENGL
 
 import GameObjects
 import ShaderLoader
+import audio
 import gamePaths
 from degreesMath import *
 
@@ -85,10 +85,27 @@ def main():
     groupCount = 32
 
     soundFile = wave.open(GamePaths.songPath, "rb")
+    sampleWidth = soundFile.getsampwidth()
+    frameRate = soundFile.getframerate()
+    channels = soundFile.getnchannels()
+
+    beatTypeRanges = (
+        (20, 60),  # Sub Bass
+        (60, 250),  # Bass
+        (250, 500),  # Low Midrange
+        (500, 2000),  # Mid Range
+        (2000, 4000),  # Upper Midrange
+        (4000, 6000),  # Presence
+        (6000, 20000)  # Brilliance
+    )
+
+    beatTypeMax = [10 for _ in range(len(beatTypeRanges))]
+    beatTypeHit = [False for _ in range(len(beatTypeRanges))]
+
     pyAudioObj = pyaudio.PyAudio()
 
-    frequencyRange = 1.0 * np.arange(chunkSize) / chunkSize * soundFile.getframerate()
-    print("Frequency Range", frequencyRange[:64], frequencyRange[16], frequencyRange[32], frequencyRange[64], frequencyRange[32*7])
+    frequencies = frameRate * np.arange(chunkSize / 2) / chunkSize
+
     maxY = 2.0 ** (pyAudioObj.get_sample_size(pyaudio.paInt16) * 8 - 1)
 
     soundStream = pyAudioObj.open(
@@ -97,8 +114,6 @@ def main():
         rate=soundFile.getframerate(),
         output=True
     )
-
-    soundEnergyHistoryBuffer = np.full((groupCount, 45), 30)
 
     soundData = [0]
 
@@ -130,36 +145,33 @@ def main():
         beat = False
 
         if len(soundData) > 0:
-            #  http://www.williamvennes.com/beat-detection.html
-
             soundData = soundFile.readframes(chunkSize)
             soundStream.write(soundData)
 
-            channelsData = np.array(struct.unpack("%dh" % (chunkSize * 2), soundData))
+            #  https://github.com/WarrenWeckesser/wavio/blob/cff688a318173a2bc700297a30a70858730b901f/wavio.py
+            #  https://github.com/maxemitchell/portfolio/blob/master/src/pages/code_art/thanksgiving_break/index.js
+            #  https://github.com/maxemitchell/beat-detection-python/blob/master/beat-detector.py
 
-            channelsDataAmplitudeL = np.fft.fft(channelsData[::2], chunkSize)
-            channelsDataAmplitudeR = np.fft.fft(channelsData[1::2], chunkSize)
+            audioArrayData = audio.audioDataToArray(soundData, sampleWidth, channels)
+            audioFFT = np.abs((np.fft.fft(audioArrayData)[:int(len(audioArrayData)/2)]) / len(audioArrayData))
 
-            soundAmplitudeBuffer = channelsDataAmplitudeL + channelsDataAmplitudeR  # Adds Two arrays element-wise.
-            soundAmplitudeBuffer = abs(soundAmplitudeBuffer)
+            beatTypeIndices = [
+                [frequencyI for frequencyI, frequency in enumerate(frequencies)
+                 if frequency >= lowerB and frequency < upperB] for lowerB, upperB in beatTypeRanges
+            ]
 
-            #nstantEnergyBuffer = (32/1024) * np.sum(soundAmplitudeBuffer.reshape(-1, 32), axis=1)  # Splits Array into 32 sets of 32 and sums each set (entire thing just averages)
-            instantEnergyBuffer = np.average(soundAmplitudeBuffer.reshape(-1, chunkSize//groupCount), axis=1)
+            beatMaxFFT = [np.max(audioFFT[beatIndexRange]) for beatIndexRange in beatTypeIndices]
+            beatTypeMax = [max(beatMax, beatTypeMax[i]) for i, beatMax in enumerate(beatMaxFFT)]
 
-            if all(instantEnergyBuffer != 0):
-                #print(1, instantEnergyBuffer[0])
-                soundEnergyHistoryBuffer = np.roll(soundEnergyHistoryBuffer, 1, axis=1)
-                soundEnergyHistoryBuffer[:, 0] = instantEnergyBuffer
+            for i, beatMax in enumerate(beatMaxFFT):
+                if beatMax >= beatTypeMax[i] * 0.5 and not beatTypeHit[i]:
+                    beatTypeHit[i] = True
 
-                averageSoundEnergyHistory = np.average(soundEnergyHistoryBuffer, axis=1)
-                #print(averageSoundEnergyHistory[0], instantEnergyBuffer[0])
-                #print(2, averageSoundEnergyHistory[0])
-                beatBooleanMask = instantEnergyBuffer > averageSoundEnergyHistory * 5
+                elif beatMax < beatTypeMax[i] * .3:
+                    beatTypeHit[i] = False
 
-                if any(beatBooleanMask):
-                    beat = True
-
-                #print(channelsDataAmplitudeL[20], channelsDataAmplitudeR[20])
+            if any(beatTypeHit[:4]):
+                beat = True
 
         particleEmitterObject.update(deltaT, rotationAngle, push=beat)
         particleEmitterObject.sort(cameraPos)
