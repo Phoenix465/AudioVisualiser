@@ -1,8 +1,16 @@
-#version 330
-in vec4 newColor;
+#version 450 core
+
+in PARTICLEOUT {
+    vec4 color;
+    float brightness;
+} particlein;
+
 out vec4 outColor;
 
 void main()
 {
-    outColor = newColor;
+    if (brightness < 0.0) {
+        discard;
+    }
+    outColor = particlein.color;
 }
