@@ -48,7 +48,7 @@ def main():
     print(f"OpenGL Version: {glGetString(GL_VERSION).decode()}")
 
     glMatrixMode(GL_PROJECTION)
-    #gluPerspective(70, (displayV.X / displayV.Y), 0.1, 128.0)
+    # gluPerspective(70, (displayV.X / displayV.Y), 0.1, 128.0)
     glViewport(0, 0, int(displayV.x), int(displayV.y))
     glMatrixMode(GL_MODELVIEW)
 
@@ -56,20 +56,27 @@ def main():
     glEnable(GL_MULTISAMPLE)
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_SRC_ALPHA)
-    #glDisable(GL_CULL_FACE)
+    # glDisable(GL_CULL_FACE)
 
     glClearColor(0, 0, 0, 1.0)
-    #glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+    # glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
 
     # ----- Camera Settings -----
     cameraRadius = 7
     cameraPos = glm.vec3(0, 0, cameraRadius)
     cameraFront = glm.vec3(0, 0, 0)
     cameraUp = glm.vec3(0, 1, 0)
-    rotationAngle = 0
+    rotationXAngle = 0
+    rotationYAngle = 90
+    yDirection = 1
+
+    cameraAccel = 0
+    cameraVelocityDecay = 0.95
+    cameraMinVelocity = 20
+    cameraCurrentVelocity = 20
 
     # ----- Matrix Info -----
-    projectionMatrix = glm.perspective(70, displayV.x/displayV.y, 1, 1000.0)
+    projectionMatrix = glm.perspective(70, displayV.x / displayV.y, 1, 1000.0)
     modelMatrix = glm.mat4(1)
 
     glUniformMatrix4fv(uniformModel, 1, GL_FALSE,
@@ -102,6 +109,10 @@ def main():
     beatTypeMax = [10 for _ in range(len(beatTypeRanges))]
     beatTypeHit = [False for _ in range(len(beatTypeRanges))]
 
+    beatMinThreshold = [0.16, 0.16, 0.16, 0.16, 0.16, 0.16, 0.16]
+    beatCutOff = [0, 0, 0, 0, 0, 0, 0]
+    beatDecayRate = [0.97 for _ in range(len(beatTypeRanges))]
+
     pyAudioObj = pyaudio.PyAudio()
 
     frequencies = frameRate * np.arange(chunkSize / 2) / chunkSize
@@ -124,7 +135,7 @@ def main():
     while running:
         deltaT = clock.tick(60)
         s = time() * 1000
-        
+
         keyPressed = pygame.key.get_pressed()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -132,8 +143,36 @@ def main():
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-        rotationAngle += deltaT / 1000 * 10
-        cameraPos = glm.vec3(sin(rotationAngle) * cameraRadius, 0, cos(rotationAngle) * cameraRadius)
+        cameraCurrentVelocity += cameraAccel
+        cameraAccel = 0
+        cameraCurrentVelocity *= cameraVelocityDecay
+        cameraCurrentVelocity = max(cameraCurrentVelocity, cameraMinVelocity)
+
+        rotationXAngle += deltaT / 1000 * cameraCurrentVelocity
+        rotationYAngle += deltaT / 1000 * 45 * yDirection
+        
+        if rotationYAngle > 360:
+            rotationYAngle -= 360
+        elif rotationYAngle < 0:
+            rotationYAngle += 360
+            
+        if rotationXAngle > 360:
+            rotationXAngle -= 360
+        elif rotationXAngle < 0:
+            rotationXAngle += 360
+            
+        cameraHeight = sin(rotationYAngle+90) * cameraRadius
+        cameraAdjRadius = abs(cos(rotationYAngle+90)) * cameraRadius
+
+        if rotationYAngle < 45:
+            rotationYAngle = 45
+            yDirection *= -1
+
+        if rotationYAngle > 135:
+            rotationYAngle = 135
+            yDirection *= -1
+
+        cameraPos = glm.vec3(sin(rotationXAngle) * cameraAdjRadius, cameraHeight, cos(rotationXAngle) * cameraAdjRadius)
 
         viewMatrix = glm.lookAt(cameraPos,
                                 cameraFront,
@@ -153,7 +192,7 @@ def main():
             #  https://github.com/maxemitchell/beat-detection-python/blob/master/beat-detector.py
 
             audioArrayData = audio.audioDataToArray(soundData, sampleWidth, channels)
-            audioFFT = np.abs((np.fft.fft(audioArrayData)[:int(len(audioArrayData)/2)]) / len(audioArrayData))
+            audioFFT = np.abs((np.fft.fft(audioArrayData)[:int(len(audioArrayData) / 2)]) / len(audioArrayData))
 
             beatTypeIndices = [
                 [frequencyI for frequencyI, frequency in enumerate(frequencies)
@@ -163,17 +202,16 @@ def main():
             beatMaxFFT = [np.max(audioFFT[beatIndexRange]) for beatIndexRange in beatTypeIndices]
             beatTypeMax = [max(beatMax, beatTypeMax[i]) for i, beatMax in enumerate(beatMaxFFT)]
 
-            for i, beatMax in enumerate(beatMaxFFT):
-                if beatMax >= beatTypeMax[i] * 0.5 and not beatTypeHit[i]:
-                    beatTypeHit[i] = True
+            for i, beatMax in enumerate(beatMaxFFT[:4]):
+                if beatMax >= beatTypeMax[i] * beatCutOff[i] and beatMax >= beatTypeMax[i] * beatMinThreshold[i]:
+                    beatCutOff[i] = 1
+                    cameraAccel = 20
+                    beat = True
+                else:
+                    beatCutOff[i] *= beatDecayRate[i]
+                    beatCutOff[i] = max(beatCutOff[i], beatMinThreshold[i])
 
-                elif beatMax < beatTypeMax[i] * .3:
-                    beatTypeHit[i] = False
-
-            if any(beatTypeHit[:4]):
-                beat = True
-
-        particleEmitterObject.update(deltaT, rotationAngle, push=beat)
+        particleEmitterObject.update(deltaT, rotationXAngle, rotationYAngle, push=beat)
         particleEmitterObject.sort(cameraPos)
         particleEmitterObject.draw()
 

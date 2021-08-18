@@ -13,7 +13,7 @@ class VBOParticle:
     def __init__(self, shader, vertices, particles):
         self.vertices = vertices
         self.particles = particles
-        self.particleData = self.serializeParticles(0)
+        self.particleData = self.serializeParticles(0, 0)
 
         self.polygon = self.generatePolygon()
 
@@ -90,10 +90,10 @@ class VBOParticle:
         glBindBuffer(GL_ARRAY_BUFFER, 0)
         glBindVertexArray(0)
 
-    def update(self, cameraAngle):
+    def update(self, cameraXAngle, cameraYAngle):
         glBindVertexArray(self.VAO)
 
-        self.particleData = self.serializeParticles(cameraAngle)
+        self.particleData = self.serializeParticles(cameraXAngle, cameraYAngle)
 
         glBindBuffer(GL_ARRAY_BUFFER, self.PBO)
         glBufferSubData(GL_ARRAY_BUFFER, 0, len(self.particleData) * 4, self.particleData)
@@ -105,9 +105,14 @@ class VBOParticle:
         glDrawElementsInstanced(GL_TRIANGLES, len(self.indices), GL_UNSIGNED_INT, None, len(self.particles))
         glBindVertexArray(0)
 
-    def serializeParticles(self, cameraAngle):
+    def serializeParticles(self, cameraXAngle, cameraYAngle):
         lookMatrix = glm.mat4(1)
-        lookMatrix = glm.rotate(lookMatrix, glm.radians(cameraAngle), (0, 1, 0))
+
+        yRotation = glm.rotate(lookMatrix, glm.radians(cameraYAngle+90), (1, 0, 0))
+        xRotation = glm.rotate(lookMatrix, glm.radians(cameraXAngle), (0, 1, 0))
+
+        lookMatrix = xRotation * yRotation
+
         lookMatrix = lookMatrix.to_list()
         lookMatrixCombined = lookMatrix[0] + lookMatrix[1] + lookMatrix[2] + lookMatrix[3]
 
