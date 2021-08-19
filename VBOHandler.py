@@ -3,10 +3,49 @@ import ctypes
 import glm
 import numpy as np
 from OpenGL.GL import glGenBuffers, glGetAttribLocation, glBindBuffer, glBufferData, glDrawElementsInstanced, \
-    glBindVertexArray, glGenVertexArrays, glVertexAttribPointer, glBufferSubData, glEnableVertexAttribArray, \
-    glVertexAttribDivisor, GL_STATIC_DRAW, GL_DYNAMIC_DRAW, GL_UNSIGNED_INT, GL_ELEMENT_ARRAY_BUFFER, GL_ARRAY_BUFFER, \
+    glBindVertexArray, glGenVertexArrays, glVertexAttribPointer, glDrawArrays, glBufferSubData, \
+    glEnableVertexAttribArray, \
+    glVertexAttribDivisor, GL_STATIC_DRAW, GL_TRIANGLE_STRIP, GL_DYNAMIC_DRAW, GL_UNSIGNED_INT, GL_ELEMENT_ARRAY_BUFFER, \
+    GL_ARRAY_BUFFER, \
     GL_FLOAT, GL_FALSE, \
     GL_TRIANGLES
+
+
+class VBOScreen:
+    def __init__(self, vertices, textureCoords):
+        self.vertices = vertices
+        self.textureCoords = textureCoords
+
+        self.VAO = glGenVertexArrays(1)
+        self.VBO = glGenBuffers(1)  # Vertex Buffer Object
+
+        self.polygon = []
+
+        for i in range(len(self.vertices)):
+            self.polygon.extend(self.vertices[i].to_list() + self.textureCoords[i].to_list())
+
+        self.polygon = np.array(self.polygon, dtype=np.float32)
+
+        glBindVertexArray(self.VAO)
+
+        glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
+        glBufferData(GL_ARRAY_BUFFER, 4 * len(self.polygon), self.polygon, GL_STATIC_DRAW)
+
+        self.stride = (3+2) * 4
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, self.stride, ctypes.c_void_p(0))
+        glEnableVertexAttribArray(0)
+
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, self.stride, ctypes.c_void_p(3*4))
+        glEnableVertexAttribArray(1)
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
+        glBindVertexArray(0)
+
+    def draw(self):
+        glBindVertexArray(self.VAO)
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, len(self.vertices))
+        glBindVertexArray(0)
 
 
 class VBOParticle:

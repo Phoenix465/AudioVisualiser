@@ -38,6 +38,8 @@ def main():
     pygame.display.flip()
 
     shader = ShaderLoader.compileShaders("shaders/vertex.shader", "shaders/fragment.shader")
+    shaderBlur = ShaderLoader.compileShaders("shaders/blurvertex.shader", "shaders/blurfragment.shader")
+    shaderBloom = ShaderLoader.compileShaders("shaders/bloomvertex.shader", "shaders/bloomfragment.shader")
     glUseProgram(shader)
 
     uniformModel = glGetUniformLocation(shader, 'uniform_Model')
@@ -128,6 +130,59 @@ def main():
 
     soundData = [0]
 
+    # ----- Bloom Stuff -----
+    hdrFBO = glGenFramebuffers(1)
+    glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO)
+    colourBuffers = glGenTextures(2)
+
+    for i in range(2):
+        glBindTexture(GL_TEXTURE_2D, colourBuffers[i])
+        glTexImage2D(
+            GL_TEXTURE_2D, 0, GL_RGBA16F, displayV.x, displayV.y, 0, GL_RGBA, GL_FLOAT, None
+        )
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+
+        glFramebufferTexture2D(
+            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, colourBuffers[i], 0
+        )
+
+    attachments = [GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1]
+    glDrawBuffers(2, attachments)
+    glBindFramebuffer(GL_FRAMEBUFFER, 0)
+
+    pingpongFBO = glGenFramebuffers(2)
+    pingpongColorbuffers = glGenTextures(2)
+    for i in range(2):
+        glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i])
+        glBindTexture(GL_TEXTURE_2D, pingpongColorbuffers[i])
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, displayV.x, displayV.y, 0, GL_RGBA, GL_FLOAT, None)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongColorbuffers[i], 0)
+
+    empty = glGenTextures(1)
+    glBindTexture(GL_TEXTURE_2D, empty)
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, displayV.x, displayV.y, 0, GL_RGBA, GL_FLOAT, None)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+
+    glUseProgram(shaderBlur)
+    screenQuad = GameObjects.ScreenQuad()
+    glUniform1i(glGetUniformLocation(shaderBlur, "image"), 0)
+
+    glUseProgram(shaderBloom)
+    glUniform1i(glGetUniformLocation(shaderBloom, "scene"), 0)
+    glUniform1i(glGetUniformLocation(shaderBloom, "bloomBlur"), 1)
+
+    glUseProgram(shader)
+
     times = [0]
     running = True
     clock = pygame.time.Clock()
@@ -141,6 +196,8 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
 
+        glUseProgram(shader)
+        glClearColor(0.0, 0.0, 0.0, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         cameraCurrentVelocity += cameraAccel
@@ -211,9 +268,47 @@ def main():
                     beatCutOff[i] *= beatDecayRate[i]
                     beatCutOff[i] = max(beatCutOff[i], beatMinThreshold[i])
 
+        glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        glUseProgram(shader)
+
         particleEmitterObject.update(deltaT, rotationXAngle, rotationYAngle, push=beat)
         particleEmitterObject.sort(cameraPos)
         particleEmitterObject.draw()
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+
+        horizontal, firstIteration = True, True
+        blurPass = 31
+        glUseProgram(shaderBlur)
+        for i in range(2):
+            glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i])
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+            glBindFramebuffer(GL_FRAMEBUFFER, 0)
+
+        for i in range(blurPass):
+            glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[int(horizontal)])
+
+            glUniform1i(glGetUniformLocation(shaderBlur, "horizontal"), int(horizontal))
+            glBindTexture(GL_TEXTURE_2D, firstIteration and colourBuffers[1] or pingpongColorbuffers[int(not horizontal)])
+
+            screenQuad.draw()
+            horizontal = not horizontal
+            if firstIteration:
+                firstIteration = False
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        glUseProgram(shaderBloom)
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_2D, colourBuffers[0])
+        glActiveTexture(GL_TEXTURE1)
+        glBindTexture(GL_TEXTURE_2D, pingpongFBO[int(horizontal)])
+        glUniform1i(glGetUniformLocation(shaderBloom, "bloom"), True)
+        glUniform1f(glGetUniformLocation(shaderBloom, "exposure"), 2)
+
+        screenQuad.draw()
 
         fps = str(floor(clock.get_fps()))
 

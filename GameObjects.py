@@ -8,6 +8,28 @@ from colour import *
 from degreesMath import *
 
 
+class ScreenQuad:
+    def __init__(self):
+        self.vertices = [
+            glm.vec3(-1, 1, 0),
+            glm.vec3(-1, -1, 0),
+            glm.vec3(1, 1, 0),
+            glm.vec3(1, -1, 0)
+        ]
+
+        self.textureCoords = [
+            glm.vec2(0, 1),
+            glm.vec2(0, 0),
+            glm.vec2(1, 1),
+            glm.vec2(1, 0),
+        ]
+
+        self.quadVBO = VBOHandler.VBOScreen(self.vertices, self.textureCoords)
+
+    def draw(self):
+        self.quadVBO.draw()
+
+
 class ParticleEmitter:
     @dataclass
     class Particle:
@@ -44,9 +66,8 @@ class ParticleEmitter:
             u1 = random()
             u2 = random()
 
-            latitude = acos(2*u1-1) - 90
+            latitude = acos(2*u1-1) - 90  # -90 -> 90 ==>
             longitude = 2 * 180 * u2
-
             self.particles.append(
                 self.Particle(
                     position=glm.vec3(
@@ -54,14 +75,14 @@ class ParticleEmitter:
                         cos(latitude)*sin(longitude),
                         sin(latitude),
                     ) * self.particleSpawnRadius,
-                    velocityUnitMultiplier=0.005,
+                    velocityUnitMultiplier=0.005*(random()/2+0.5),
                     scale=0.05,
                     brightness=random(),
                     scaleMinLimit=0.05,
                     scaleMaxLimit=1,
                     scaleDownVelocityPS=0.5,
                     scaleBeatJump=0.05,
-                    color=Colour(random(), random(), random(), alpha=.5),
+                    color=Colour(u2, 1, 1, alpha=1, isHSV=True),
                     rotation=random() * 360,
                     lifetime=500,
                 )
