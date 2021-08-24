@@ -52,7 +52,7 @@ class VBOParticle:
     def __init__(self, shader, vertices, particles):
         self.vertices = vertices
         self.particles = particles
-        self.particleData = self.serializeParticles(0, 0)
+        self.particleData = self.serializeParticles()
 
         self.polygon = self.generatePolygon()
 
@@ -83,7 +83,7 @@ class VBOParticle:
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, 4 * len(self.indices), self.indices, GL_STATIC_DRAW)
 
         self.vertexStride = 3 * 4
-        self.particleStride = (3 + 4 + 1 + 1 + 1 + 4 + 4 + 4 + 4) * 4
+        self.particleStride = (3 + 4 + 1 + 1 + 1) * 4
 
         self.vertexPositionLocation = glGetAttribLocation(shader, "vertexPosition")
         glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
@@ -116,33 +116,13 @@ class VBOParticle:
         glVertexAttribDivisor(self.drawLocation, 1)
         glEnableVertexAttribArray(self.drawLocation)
 
-        self.lookAtMatrix0Location = glGetAttribLocation(shader, "lookAtMatrix0")
-        glVertexAttribPointer(self.lookAtMatrix0Location, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+1+1+1) * 4))
-        glVertexAttribDivisor(self.lookAtMatrix0Location, 1)
-        glEnableVertexAttribArray(self.lookAtMatrix0Location)
-
-        self.lookAtMatrix1Location = glGetAttribLocation(shader, "lookAtMatrix1")
-        glVertexAttribPointer(self.lookAtMatrix1Location, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+1+1+1+4)*4))
-        glVertexAttribDivisor(self.lookAtMatrix1Location, 1)
-        glEnableVertexAttribArray(self.lookAtMatrix1Location)
-
-        self.lookAtMatrix2Location = glGetAttribLocation(shader, "lookAtMatrix2")
-        glVertexAttribPointer(self.lookAtMatrix2Location, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+1+1+1+4+4)*4))
-        glVertexAttribDivisor(self.lookAtMatrix2Location, 1)
-        glEnableVertexAttribArray(self.lookAtMatrix2Location)
-
-        self.lookAtMatrix3Location = glGetAttribLocation(shader, "lookAtMatrix3")
-        glVertexAttribPointer(self.lookAtMatrix3Location, 4, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+1+1+1+4+4+4)*4))
-        glVertexAttribDivisor(self.lookAtMatrix3Location, 1)
-        glEnableVertexAttribArray(self.lookAtMatrix3Location)
-
         glBindBuffer(GL_ARRAY_BUFFER, 0)
         glBindVertexArray(0)
 
-    def update(self, cameraXAngle, cameraYAngle):
+    def update(self):
         glBindVertexArray(self.VAO)
 
-        self.particleData = self.serializeParticles(cameraXAngle, cameraYAngle)
+        self.particleData = self.serializeParticles()
 
         glBindBuffer(GL_ARRAY_BUFFER, self.PBO)
         glBufferSubData(GL_ARRAY_BUFFER, 0, len(self.particleData) * 4, self.particleData)
@@ -154,20 +134,10 @@ class VBOParticle:
         glDrawElementsInstanced(GL_TRIANGLES, len(self.indices), GL_UNSIGNED_INT, None, len(self.particles))
         glBindVertexArray(0)
 
-    def serializeParticles(self, cameraXAngle, cameraYAngle):
-        lookMatrix = glm.mat4(1)
-
-        yRotation = glm.rotate(lookMatrix, glm.radians(cameraYAngle+90), (1, 0, 0))
-        xRotation = glm.rotate(lookMatrix, glm.radians(cameraXAngle), (0, 1, 0))
-
-        lookMatrix = xRotation * yRotation
-
-        lookMatrix = lookMatrix.to_list()
-        lookMatrixCombined = lookMatrix[0] + lookMatrix[1] + lookMatrix[2] + lookMatrix[3]
-
+    def serializeParticles(self):
         particleData = []
         for particle in self.particles:
-            particleData.extend(particle["position"].to_list() + particle["color"] + [particle["scale"], particle["brightness"], particle["draw"]] + lookMatrixCombined)
+            particleData.extend(particle["position"].to_list() + particle["color"] + [particle["scale"], particle["brightness"], particle["draw"]])
 
         return np.array(particleData, dtype=np.float32)
 

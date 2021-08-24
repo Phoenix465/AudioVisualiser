@@ -45,6 +45,7 @@ def main():
     uniformModel = glGetUniformLocation(shader, 'uniform_Model')
     uniformView = glGetUniformLocation(shader, 'uniform_View')
     uniformProjection = glGetUniformLocation(shader, 'uniform_Projection')
+    uniformLookAtMatrix = glGetUniformLocation(shader, 'lookAtMatrix')
 
     # ----- OpenGL Settings -----
     print(f"OpenGL Version: {glGetString(GL_VERSION).decode()}")
@@ -252,8 +253,18 @@ def main():
                                 cameraFront,
                                 cameraUp)
 
+        particleLookMatrix = glm.mat4(1)
+
+        yRotation = glm.rotate(particleLookMatrix, glm.radians(rotationYAngle+90), (1, 0, 0))
+        xRotation = glm.rotate(particleLookMatrix, glm.radians(rotationXAngle), (0, 1, 0))
+
+        particleLookMatrix = xRotation * yRotation
+
         glUniformMatrix4fv(uniformView, 1, GL_FALSE,
                            glm.value_ptr(viewMatrix))
+
+        glUniformMatrix4fv(uniformLookAtMatrix, 1, GL_FALSE,
+                           glm.value_ptr(particleLookMatrix))
 
         beat = False
         averageAmplitude = 0
@@ -293,7 +304,7 @@ def main():
         glUseProgram(shader)"""
 
         # At 3000 particles, 23 ms to update
-        particleEmitterObject.update(deltaT, rotationXAngle, rotationYAngle, pygame.time.get_ticks(), push=beat, avgAmplitude=averageAmplitude)
+        particleEmitterObject.update(deltaT, pygame.time.get_ticks(), push=beat, avgAmplitude=averageAmplitude)
 
         #  At 3000 particles, 4ms to sort, 3ms to draw
         particleEmitterObject.sort(cameraPos)
@@ -336,7 +347,6 @@ def main():
 
         e = time() * 1000
         ft = e - s
-
         times.append(ft)
 
     print(sum(times) / len(times))

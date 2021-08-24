@@ -7,7 +7,6 @@ from time import time
 import glm
 
 import VBOHandler
-from colour import *
 from degreesMath import *
 import line_profiler_pycharm
 
@@ -53,8 +52,11 @@ class ParticleEmitter:
 
         self.particles = []
         for i in range(self.particleCount):
+            newPos = self.generateSpawnPos()
+
             self.particles.append({
-                "position": self.generateSpawnPos(),
+                "position": newPos,
+                "normalisedVector": glm.normalize(newPos),
                 "distanceToCentre": self.particleSpawnRadius,
                 "velocityUnitMultiplier": 0.05,  # *(random()/2+0.5),
                 "scale": 0.05,
@@ -69,12 +71,14 @@ class ParticleEmitter:
                 "draw": 0,
                 "timestamp": 0  # Creation Date
             })
+        self.particleOrder = self.particles
 
         self.VBO = VBOHandler.VBOParticle(shader, self.circleVertices, self.particles)
 
         self.updateCount = 0
         self.currentColour = [*colorsys.hsv_to_rgb(random(), 1, 1), 1]
-        self.framesAfterBeat = 0
+        self.canChangeColour = False
+        self.lastBeatTime = 0
         self.maxDist = 10
 
     def generateSpawnPos(self):
@@ -98,28 +102,30 @@ class ParticleEmitter:
                                 reverse=True)
         self.VBO.particles = self.particles
 
-    #@line_profiler_pycharm.profile
-    def update(self, deltaT, cameraXAngle, cameraYAngle, currentTime, push=False, avgAmplitude=0):
-        def particleSortFunction(particle):
-            return particle["timestamp"] + particle["draw"] * 1000000000
-
+    def update(self, deltaT, currentTime, push=False, avgAmplitude=0):
         self.updateCount += 1
 
-        tempParticleSort = sorted(self.particles, key=particleSortFunction)
         particleCountSpawn = floor(avgAmplitude)
 
-        self.framesAfterBeat += 1
         if push:
-            self.framesAfterBeat = 0
+            self.lastBeatTime = currentTime
+            self.canChangeColour = True
 
-        if self.framesAfterBeat == 5:
+        if currentTime - self.lastBeatTime > 100 and self.canChangeColour:  # ms btw
+            self.canChangeColour = False
             self.currentColour = [*colorsys.hsv_to_rgb(random(), 1, 1), 1]
 
-        chosenParticles = tempParticleSort[:particleCountSpawn * (self.updateCount % 4 == 0) + 100 * push]
+        particleCount = particleCountSpawn * (self.updateCount % 4 == 0) + 150 * push
+        chosenParticles = self.particleOrder[:particleCount]
+        self.particleOrder = self.particleOrder[particleCount:] + self.particleOrder[:particleCount]
+
         for particle in chosenParticles:
+            newPos = self.generateSpawnPos()
+
             particle["draw"] = True
             particle["timestamp"] = currentTime
-            particle["position"] = self.generateSpawnPos()
+            particle["position"] = newPos
+            particle["normalisedVector"] = glm.normalize(newPos)
             particle["distanceToCentre"] = self.particleSpawnRadius
             particle["color"] = self.currentColour
 
@@ -127,7 +133,7 @@ class ParticleEmitter:
             if not particle["draw"]:
                 continue
 
-            if glm.length(particle["position"]) > self.maxDist:
+            if particle["distanceToCentre"] > self.maxDist:
                 particle["draw"] = False
                 continue
 
@@ -139,13 +145,13 @@ class ParticleEmitter:
             particle["scale"] = max(particle["scaleMinLimit"], particle["scale"])
             particle["scale"] = min(particle["scaleMaxLimit"], particle["scale"])
 
-            particle["position"] += glm.normalize(particle["position"]) * particle["velocityUnitMultiplier"]
+            particle["position"] += particle["normalisedVector"] * particle["velocityUnitMultiplier"]
             particle["distanceToCentre"] += particle["velocityUnitMultiplier"]
             alphaVal = 1-(particle["distanceToCentre"]/self.maxDist)
 
             particle["color"][3] = alphaVal
 
-        self.VBO.update(cameraXAngle, cameraYAngle)
+        self.VBO.update()
 
     def draw(self):
         self.VBO.draw()
