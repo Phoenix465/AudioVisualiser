@@ -64,7 +64,7 @@ def main():
     # glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
 
     # ----- Camera Settings -----
-    cameraRadius = 7
+    cameraRadius = 8
     cameraPos = glm.vec3(0, 0, cameraRadius)
     cameraFront = glm.vec3(0, 0, 0)
     cameraUp = glm.vec3(0, 1, 0)
@@ -91,7 +91,6 @@ def main():
 
     # ---- Sound Stuff -----
     chunkSize = 1024
-    groupCount = 32
 
     soundFile = wave.open(GamePaths.songPath, "rb")
     sampleWidth = soundFile.getsampwidth()
@@ -121,14 +120,28 @@ def main():
 
     maxY = 2.0 ** (pyAudioObj.get_sample_size(pyaudio.paInt16) * 8 - 1)
 
+    soundDataHolder = audio.SoundData(
+        data=b'',
+        read=False
+    )
+
+    def callback(in_data, frame_count, time_info, status):
+        data = soundFile.readframes(frame_count)
+
+        soundDataHolder.data = data
+        soundDataHolder.read = False
+
+        return (data, pyaudio.paContinue)
+
     soundStream = pyAudioObj.open(
         format=pyaudio.get_format_from_width(soundFile.getsampwidth()),
         channels=soundFile.getnchannels(),
         rate=soundFile.getframerate(),
-        output=True
+        output=True,
+        stream_callback=callback
     )
 
-    soundData = [0]
+    soundStream.start_stream()
 
     # ----- Bloom Stuff -----
     hdrFBO = glGenFramebuffers(1)
@@ -181,7 +194,11 @@ def main():
     glUniform1i(glGetUniformLocation(shaderBloom, "scene"), 0)
     glUniform1i(glGetUniformLocation(shaderBloom, "bloomBlur"), 1)
 
+    glUniform1i(glGetUniformLocation(shaderBloom, "bloom"), True)
+    glUniform1f(glGetUniformLocation(shaderBloom, "exposure"), 2)
+
     glUseProgram(shader)
+    glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
     times = [0]
     running = True
@@ -196,7 +213,7 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
 
-        glUseProgram(shader)
+        #glUseProgram(shader)
         glClearColor(0.0, 0.0, 0.0, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
@@ -239,17 +256,20 @@ def main():
                            glm.value_ptr(viewMatrix))
 
         beat = False
+        averageAmplitude = 0
 
-        if len(soundData) > 0:
-            soundData = soundFile.readframes(chunkSize)
-            soundStream.write(soundData)
-
+        if len(soundDataHolder.data) > 0 and not soundDataHolder.read:
             #  https://github.com/WarrenWeckesser/wavio/blob/cff688a318173a2bc700297a30a70858730b901f/wavio.py
             #  https://github.com/maxemitchell/portfolio/blob/master/src/pages/code_art/thanksgiving_break/index.js
             #  https://github.com/maxemitchell/beat-detection-python/blob/master/beat-detector.py
 
+            soundDataHolder.read = True
+            soundData = soundDataHolder.data
+
             audioArrayData = audio.audioDataToArray(soundData, sampleWidth, channels)
             audioFFT = np.abs((np.fft.fft(audioArrayData)[:int(len(audioArrayData) / 2)]) / len(audioArrayData))
+
+            averageAmplitude = np.average(audioFFT)
 
             beatTypeIndices = [
                 [frequencyI for frequencyI, frequency in enumerate(frequencies)
@@ -268,18 +288,21 @@ def main():
                     beatCutOff[i] *= beatDecayRate[i]
                     beatCutOff[i] = max(beatCutOff[i], beatMinThreshold[i])
 
-        glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO)
+        """glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        glUseProgram(shader)
+        glUseProgram(shader)"""
 
-        particleEmitterObject.update(deltaT, rotationXAngle, rotationYAngle, push=beat)
+        # At 3000 particles, 23 ms to update
+        particleEmitterObject.update(deltaT, rotationXAngle, rotationYAngle, pygame.time.get_ticks(), push=beat, avgAmplitude=averageAmplitude)
+
+        #  At 3000 particles, 4ms to sort, 3ms to draw
         particleEmitterObject.sort(cameraPos)
         particleEmitterObject.draw()
 
-        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        """glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
         horizontal, firstIteration = True, True
-        blurPass = 31
+        blurPass = 11
         glUseProgram(shaderBlur)
         for i in range(2):
             glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i])
@@ -294,8 +317,7 @@ def main():
 
             screenQuad.draw()
             horizontal = not horizontal
-            if firstIteration:
-                firstIteration = False
+            firstIteration = False
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
@@ -305,10 +327,8 @@ def main():
         glBindTexture(GL_TEXTURE_2D, colourBuffers[0])
         glActiveTexture(GL_TEXTURE1)
         glBindTexture(GL_TEXTURE_2D, pingpongFBO[int(horizontal)])
-        glUniform1i(glGetUniformLocation(shaderBloom, "bloom"), True)
-        glUniform1f(glGetUniformLocation(shaderBloom, "exposure"), 2)
 
-        screenQuad.draw()
+        screenQuad.draw()"""
 
         fps = str(floor(clock.get_fps()))
 
@@ -323,4 +343,13 @@ def main():
 
 
 if __name__ == "__main__":
+    """import cProfile, pstats
+
+    profiler = cProfile.Profile()
+    profiler.enable()
+    main()
+    profiler.disable()
+    stats = pstats.Stats(profiler).sort_stats('cumtime')
+    stats.print_stats()"""
+
     main()

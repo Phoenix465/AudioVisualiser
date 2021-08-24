@@ -1,4 +1,5 @@
 import numpy as np
+from dataclasses import dataclass
 
 
 def audioDataToArray(soundData, sampleWidth, channels):
@@ -22,3 +23,9 @@ def audioDataToArray(soundData, sampleWidth, channels):
         result = a.reshape(-1, channels)
 
     return result
+
+
+@dataclass
+class SoundData:
+    data: bytes
+    read: bool

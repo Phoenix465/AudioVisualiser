@@ -1,11 +1,14 @@
 from dataclasses import dataclass
+from math import floor
 from random import random
+from time import time
 
 import glm
 
 import VBOHandler
 from colour import *
 from degreesMath import *
+import line_profiler_pycharm
 
 
 class ScreenQuad:
@@ -34,26 +37,30 @@ class ParticleEmitter:
     @dataclass
     class Particle:
         position: glm.vec3
+        distanceToCentre: float
         velocityUnitMultiplier: float
         color: Colour
         lifetime: float
         scale: float
+        draw: float
         scaleMinLimit: float
         scaleMaxLimit: float
         scaleDownVelocityPS: float
         scaleBeatJump: float
         rotation: float
         brightness: float
+        timestamp: int
+
 
     def __init__(self, shader):
-        self.particleCount = 2000
+        self.particleCount = 3000
 
         self.particleSpawnRadius = 0.001
 
         self.circleSides = 100
         self.circleVertices = []
         for i in range(self.circleSides):
-            angle = i/self.circleSides * 360
+            angle = i / self.circleSides * 360
             width = sin(angle)
             height = cos(angle)
 
@@ -63,39 +70,86 @@ class ParticleEmitter:
 
         self.particles = []
         for i in range(self.particleCount):
-            u1 = random()
-            u2 = random()
-
-            latitude = acos(2*u1-1) - 90  # -90 -> 90 ==>
-            longitude = 2 * 180 * u2
             self.particles.append(
                 self.Particle(
-                    position=glm.vec3(
-                        cos(latitude)*cos(longitude),
-                        cos(latitude)*sin(longitude),
-                        sin(latitude),
-                    ) * self.particleSpawnRadius,
-                    velocityUnitMultiplier=0.005*(random()/2+0.5),
+                    position=self.generateSpawnPos(),
+                    distanceToCentre=self.particleSpawnRadius,
+                    velocityUnitMultiplier=0.05,  # *(random()/2+0.5),
                     scale=0.05,
-                    brightness=random(),
+                    brightness=1,
                     scaleMinLimit=0.05,
                     scaleMaxLimit=1,
                     scaleDownVelocityPS=0.5,
                     scaleBeatJump=0.05,
-                    color=Colour(u2, 1, 1, alpha=1, isHSV=True),
+                    color=Colour(random(), 1, 1, alpha=1, isHSV=True),
                     rotation=random() * 360,
                     lifetime=500,
+                    draw=0,
+                    timestamp=0,  # Creation Date
                 )
             )
-            
+
         self.VBO = VBOHandler.VBOParticle(shader, self.circleVertices, self.particles)
 
+        self.updateCount = 0
+        self.currentColour = Colour(random(), 1, 1, alpha=1, isHSV=True)
+        self.framesAfterBeat = 0
+        self.maxDist = 10
+
+    def generateSpawnPos(self):
+        u1 = random()
+        u2 = random()
+
+        latitude = acos(2 * u1 - 1) - 90  # -90 -> 90 ==>
+        longitude = 2 * 180 * u2
+
+        return glm.vec3(
+            cos(latitude) * cos(longitude),
+            cos(latitude) * sin(longitude),
+            sin(latitude),
+        ) * self.particleSpawnRadius
+
     def sort(self, cameraPos):
-        self.particles = sorted(self.particles, key=lambda particle: glm.length(particle.position-cameraPos), reverse=True)
+        def particleSortFunction(particle):
+            return glm.length(particle.position - cameraPos)
+
+        self.particles = sorted(self.particles, key=particleSortFunction,
+                                reverse=True)
         self.VBO.particles = self.particles
 
-    def update(self, deltaT, cameraXAngle, cameraYAngle, push=False):
+    #@line_profiler_pycharm.profile
+    def update(self, deltaT, cameraXAngle, cameraYAngle, currentTime, push=False, avgAmplitude=0):
+        def particleSortFunction(particle):
+            return particle.timestamp + particle.draw * 1000000000
+
+        self.updateCount += 1
+
+        tempParticleSort = sorted(self.particles, key=particleSortFunction)
+        particleCountSpawn = floor(avgAmplitude)
+
+        self.framesAfterBeat += 1
+        if push:
+            self.framesAfterBeat = 0
+
+        if self.framesAfterBeat == 5:
+            self.currentColour = Colour(random(), 1, 1, alpha=1, isHSV=True)
+
+        chosenParticles = tempParticleSort[:particleCountSpawn * (self.updateCount % 4 == 0) + 100 * push]
+        for particle in chosenParticles:
+            particle.draw = True
+            particle.timestamp = currentTime
+            particle.position = self.generateSpawnPos()
+            particle.distanceToCentre = self.particleSpawnRadius
+            particle.color = self.currentColour
+
         for particle in self.particles:
+            if not particle.draw:
+                continue
+
+            if glm.length(particle.position) > self.maxDist:
+                particle.draw = False
+                continue
+
             particle.scale -= particle.scaleDownVelocityPS * deltaT / 1000
 
             if push:
@@ -105,6 +159,17 @@ class ParticleEmitter:
             particle.scale = min(particle.scaleMaxLimit, particle.scale)
 
             particle.position += glm.normalize(particle.position) * particle.velocityUnitMultiplier
+            particle.distanceToCentre += particle.velocityUnitMultiplier
+            alphaVal = 1-(particle.distanceToCentre/self.maxDist)
+
+            particle.color.RGBAList[3] = alphaVal
+
+            """particle.color = Colour(
+                particle.color.r,
+                particle.color.g,
+                particle.color.b,
+                alpha=alphaVal
+            )"""
 
         self.VBO.update(cameraXAngle, cameraYAngle)
 

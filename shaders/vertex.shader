@@ -8,6 +8,7 @@ in vec3 worldPosition;
 in vec4 color;
 in float scale;
 in float brightness;
+in int draw;
 
 in vec4 lookAtMatrix0;
 in vec4 lookAtMatrix1;
@@ -17,6 +18,7 @@ in vec4 lookAtMatrix3;
 out PARTICLEOUT {
     vec4 color;
     float brightness;
+    int valid;
 } particleout;
 
 void main()
@@ -27,4 +29,5 @@ void main()
 
     particleout.color = color;
     particleout.brightness = brightness;
+    particleout.valid = draw;
 }
