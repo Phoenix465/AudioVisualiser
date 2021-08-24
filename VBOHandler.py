@@ -167,7 +167,7 @@ class VBOParticle:
 
         particleData = []
         for particle in self.particles:
-            particleData.extend(particle.position.to_list() + particle.color.RGBAList + [particle.scale, particle.brightness, particle.draw] + lookMatrixCombined)
+            particleData.extend(particle["position"].to_list() + particle["color"] + [particle["scale"], particle["brightness"], particle["draw"]] + lookMatrixCombined)
 
         return np.array(particleData, dtype=np.float32)
 

@@ -1,3 +1,4 @@
+import colorsys
 from dataclasses import dataclass
 from math import floor
 from random import random
@@ -34,24 +35,6 @@ class ScreenQuad:
 
 
 class ParticleEmitter:
-    @dataclass
-    class Particle:
-        position: glm.vec3
-        distanceToCentre: float
-        velocityUnitMultiplier: float
-        color: Colour
-        lifetime: float
-        scale: float
-        draw: float
-        scaleMinLimit: float
-        scaleMaxLimit: float
-        scaleDownVelocityPS: float
-        scaleBeatJump: float
-        rotation: float
-        brightness: float
-        timestamp: int
-
-
     def __init__(self, shader):
         self.particleCount = 3000
 
@@ -70,29 +53,27 @@ class ParticleEmitter:
 
         self.particles = []
         for i in range(self.particleCount):
-            self.particles.append(
-                self.Particle(
-                    position=self.generateSpawnPos(),
-                    distanceToCentre=self.particleSpawnRadius,
-                    velocityUnitMultiplier=0.05,  # *(random()/2+0.5),
-                    scale=0.05,
-                    brightness=1,
-                    scaleMinLimit=0.05,
-                    scaleMaxLimit=1,
-                    scaleDownVelocityPS=0.5,
-                    scaleBeatJump=0.05,
-                    color=Colour(random(), 1, 1, alpha=1, isHSV=True),
-                    rotation=random() * 360,
-                    lifetime=500,
-                    draw=0,
-                    timestamp=0,  # Creation Date
-                )
-            )
+            self.particles.append({
+                "position": self.generateSpawnPos(),
+                "distanceToCentre": self.particleSpawnRadius,
+                "velocityUnitMultiplier": 0.05,  # *(random()/2+0.5),
+                "scale": 0.05,
+                "brightness": 1,
+                "scaleMinLimit": 0.05,
+                "scaleMaxLimit": 1,
+                "scaleDownVelocityPS": 0.5,
+                "scaleBeatJump": 0.05,
+                "color": [*colorsys.hsv_to_rgb(random(), 1, 1), 1],
+                "rotation": random() * 360,
+                "lifetime": 500,
+                "draw": 0,
+                "timestamp": 0  # Creation Date
+            })
 
         self.VBO = VBOHandler.VBOParticle(shader, self.circleVertices, self.particles)
 
         self.updateCount = 0
-        self.currentColour = Colour(random(), 1, 1, alpha=1, isHSV=True)
+        self.currentColour = [*colorsys.hsv_to_rgb(random(), 1, 1), 1]
         self.framesAfterBeat = 0
         self.maxDist = 10
 
@@ -111,7 +92,7 @@ class ParticleEmitter:
 
     def sort(self, cameraPos):
         def particleSortFunction(particle):
-            return glm.length(particle.position - cameraPos)
+            return glm.length(particle["position"] - cameraPos)
 
         self.particles = sorted(self.particles, key=particleSortFunction,
                                 reverse=True)
@@ -120,7 +101,7 @@ class ParticleEmitter:
     #@line_profiler_pycharm.profile
     def update(self, deltaT, cameraXAngle, cameraYAngle, currentTime, push=False, avgAmplitude=0):
         def particleSortFunction(particle):
-            return particle.timestamp + particle.draw * 1000000000
+            return particle["timestamp"] + particle["draw"] * 1000000000
 
         self.updateCount += 1
 
@@ -132,44 +113,37 @@ class ParticleEmitter:
             self.framesAfterBeat = 0
 
         if self.framesAfterBeat == 5:
-            self.currentColour = Colour(random(), 1, 1, alpha=1, isHSV=True)
+            self.currentColour = [*colorsys.hsv_to_rgb(random(), 1, 1), 1]
 
         chosenParticles = tempParticleSort[:particleCountSpawn * (self.updateCount % 4 == 0) + 100 * push]
         for particle in chosenParticles:
-            particle.draw = True
-            particle.timestamp = currentTime
-            particle.position = self.generateSpawnPos()
-            particle.distanceToCentre = self.particleSpawnRadius
-            particle.color = self.currentColour
+            particle["draw"] = True
+            particle["timestamp"] = currentTime
+            particle["position"] = self.generateSpawnPos()
+            particle["distanceToCentre"] = self.particleSpawnRadius
+            particle["color"] = self.currentColour
 
         for particle in self.particles:
-            if not particle.draw:
+            if not particle["draw"]:
                 continue
 
-            if glm.length(particle.position) > self.maxDist:
-                particle.draw = False
+            if glm.length(particle["position"]) > self.maxDist:
+                particle["draw"] = False
                 continue
 
-            particle.scale -= particle.scaleDownVelocityPS * deltaT / 1000
+            particle["scale"] -= particle["scaleDownVelocityPS"] * deltaT / 1000
 
             if push:
-                particle.scale += particle.scaleBeatJump
+                particle["scale"] += particle["scaleBeatJump"]
 
-            particle.scale = max(particle.scaleMinLimit, particle.scale)
-            particle.scale = min(particle.scaleMaxLimit, particle.scale)
+            particle["scale"] = max(particle["scaleMinLimit"], particle["scale"])
+            particle["scale"] = min(particle["scaleMaxLimit"], particle["scale"])
 
-            particle.position += glm.normalize(particle.position) * particle.velocityUnitMultiplier
-            particle.distanceToCentre += particle.velocityUnitMultiplier
-            alphaVal = 1-(particle.distanceToCentre/self.maxDist)
+            particle["position"] += glm.normalize(particle["position"]) * particle["velocityUnitMultiplier"]
+            particle["distanceToCentre"] += particle["velocityUnitMultiplier"]
+            alphaVal = 1-(particle["distanceToCentre"]/self.maxDist)
 
-            particle.color.RGBAList[3] = alphaVal
-
-            """particle.color = Colour(
-                particle.color.r,
-                particle.color.g,
-                particle.color.b,
-                alpha=alphaVal
-            )"""
+            particle["color"][3] = alphaVal
 
         self.VBO.update(cameraXAngle, cameraYAngle)
 
