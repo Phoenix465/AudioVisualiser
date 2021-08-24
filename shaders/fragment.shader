@@ -17,7 +17,7 @@ void main()
 
     outColor = particlein.color;
 
-    if (particlein.brightness > 0) {
+    if (particlein.brightness > 0.5) {
         brightColor = vec4(outColor.rgb, 1);
     }
     else {

@@ -150,6 +150,7 @@ class ParticleEmitter:
             alphaVal = 1-(particle["distanceToCentre"]/self.maxDist)
 
             particle["color"][3] = alphaVal
+            particle["brightness"] = alphaVal
 
         self.VBO.update()
 

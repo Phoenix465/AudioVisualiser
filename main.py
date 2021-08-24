@@ -214,7 +214,7 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
 
-        #glUseProgram(shader)
+        glUseProgram(shader)
         glClearColor(0.0, 0.0, 0.0, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
@@ -299,9 +299,9 @@ def main():
                     beatCutOff[i] *= beatDecayRate[i]
                     beatCutOff[i] = max(beatCutOff[i], beatMinThreshold[i])
 
-        """glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO)
+        glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        glUseProgram(shader)"""
+        glUseProgram(shader)
 
         # At 3000 particles, 23 ms to update
         particleEmitterObject.update(deltaT, pygame.time.get_ticks(), push=beat, avgAmplitude=averageAmplitude)
@@ -310,7 +310,7 @@ def main():
         particleEmitterObject.sort(cameraPos)
         particleEmitterObject.draw()
 
-        """glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
         horizontal, firstIteration = True, True
         blurPass = 11
@@ -339,7 +339,7 @@ def main():
         glActiveTexture(GL_TEXTURE1)
         glBindTexture(GL_TEXTURE_2D, pingpongFBO[int(horizontal)])
 
-        screenQuad.draw()"""
+        screenQuad.draw()
 
         fps = str(floor(clock.get_fps()))
 
