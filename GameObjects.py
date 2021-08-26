@@ -60,7 +60,6 @@ class ParticleEmitter:
                 "distanceToCentre": self.particleSpawnRadius,
                 "velocityUnitMultiplier": 0.05,  # *(random()/2+0.5),
                 "scale": 0.05,
-                "brightness": 1,
                 "scaleMinLimit": 0.05,
                 "scaleMaxLimit": 1,
                 "scaleDownVelocityPS": 0.5,
@@ -153,7 +152,6 @@ class ParticleEmitter:
             alphaVal = 1-(particle["distanceToCentre"]/self.maxDist)
 
             particle["color"][3] = alphaVal
-            particle["brightness"] = alphaVal
 
         self.VBO.update()
 

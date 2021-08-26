@@ -83,7 +83,7 @@ class VBOParticle:
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, 4 * len(self.indices), self.indices, GL_STATIC_DRAW)
 
         self.vertexStride = 3 * 4
-        self.particleStride = (3 + 4 + 1 + 1 + 1) * 4
+        self.particleStride = (3 + 4 + 1 + 1) * 4
 
         self.vertexPositionLocation = glGetAttribLocation(shader, "vertexPosition")
         glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
@@ -106,13 +106,8 @@ class VBOParticle:
         glVertexAttribDivisor(self.scaleLocation, 1)
         glEnableVertexAttribArray(self.scaleLocation)
 
-        self.brightnessLocation = glGetAttribLocation(shader, "brightness")
-        glVertexAttribPointer(self.brightnessLocation, 1, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+1) * 4))
-        glVertexAttribDivisor(self.brightnessLocation, 1)
-        glEnableVertexAttribArray(self.brightnessLocation)
-
         self.drawLocation = glGetAttribLocation(shader, "draw")
-        glVertexAttribPointer(self.drawLocation, 1, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+1+1) * 4))
+        glVertexAttribPointer(self.drawLocation, 1, GL_FLOAT, GL_FALSE, self.particleStride, ctypes.c_void_p((3+4+1) * 4))
         glVertexAttribDivisor(self.drawLocation, 1)
         glEnableVertexAttribArray(self.drawLocation)
 
@@ -137,7 +132,7 @@ class VBOParticle:
     def serializeParticles(self):
         particleData = []
         for particle in self.particles:
-            particleData.extend(particle["position"].to_list() + particle["color"] + [particle["scale"], particle["brightness"], particle["draw"]])
+            particleData.extend(particle["position"].to_list() + particle["color"] + [particle["scale"], particle["draw"]])
 
         return np.array(particleData, dtype=np.float32)
 
