@@ -35,7 +35,7 @@ class ScreenQuad:
 
 class ParticleEmitter:
     def __init__(self, shader):
-        self.particleCount = 3000
+        self.particleCount = 2000
 
         self.particleSpawnRadius = 0.001
 
@@ -86,6 +86,9 @@ class ParticleEmitter:
         u2 = random()
 
         latitude = acos(2 * u1 - 1) - 90  # -90 -> 90 ==>
+        #latitude = (acos(2 * u1 - 1) - 90)*0.1 + 180  # -90 -> 90 ==>
+        #latitude = 45
+
         longitude = 2 * 180 * u2
 
         return glm.vec3(
@@ -111,11 +114,11 @@ class ParticleEmitter:
             self.lastBeatTime = currentTime
             self.canChangeColour = True
 
-        if currentTime - self.lastBeatTime > 100 and self.canChangeColour:  # ms btw
+        if currentTime - self.lastBeatTime > 80 and self.canChangeColour:  # ms btw
             self.canChangeColour = False
             self.currentColour = [*colorsys.hsv_to_rgb(random(), 1, 1), 1]
 
-        particleCount = particleCountSpawn * (self.updateCount % 4 == 0) + 150 * push
+        particleCount = particleCountSpawn * (self.updateCount % 4 == 0) + 200 * push
         chosenParticles = self.particleOrder[:particleCount]
         self.particleOrder = self.particleOrder[particleCount:] + self.particleOrder[:particleCount]
 

@@ -71,10 +71,11 @@ def main():
     cameraUp = glm.vec3(0, 1, 0)
     rotationXAngle = 0
     rotationYAngle = 90
+    rotationZAngle = 0
     yDirection = 1
 
     cameraAccel = 0
-    cameraVelocityDecay = 0.95
+    cameraVelocityDecay = 0.94
     cameraMinVelocity = 20
     cameraCurrentVelocity = 20
 
@@ -113,7 +114,7 @@ def main():
 
     beatMinThreshold = [0.16, 0.16, 0.16, 0.16, 0.16, 0.16, 0.16]
     beatCutOff = [0, 0, 0, 0, 0, 0, 0]
-    beatDecayRate = [0.97 for _ in range(len(beatTypeRanges))]
+    beatDecayRate = [0.965 for _ in range(len(beatTypeRanges))]
 
     pyAudioObj = pyaudio.PyAudio()
 
@@ -130,7 +131,7 @@ def main():
         data = soundFile.readframes(frame_count)
 
         soundDataHolder.data = data
-        soundDataHolder.read = False
+        soundDataHolder.read = len(data) < frame_count * sampleWidth * channels
 
         return (data, pyaudio.paContinue)
 
@@ -225,7 +226,8 @@ def main():
 
         rotationXAngle += deltaT / 1000 * cameraCurrentVelocity
         rotationYAngle += deltaT / 1000 * 45 * yDirection
-        
+        #rotationZAngle += deltaT / 1000 * 5
+
         if rotationYAngle > 360:
             rotationYAngle -= 360
         elif rotationYAngle < 0:
@@ -235,19 +237,27 @@ def main():
             rotationXAngle -= 360
         elif rotationXAngle < 0:
             rotationXAngle += 360
-            
-        cameraHeight = sin(rotationYAngle+90) * cameraRadius
-        cameraAdjRadius = abs(cos(rotationYAngle+90)) * cameraRadius
 
-        if rotationYAngle < 45:
+        if rotationZAngle > 360:
+            rotationZAngle -= 360
+        elif rotationZAngle < 0:
+            rotationZAngle += 360
+
+        """if rotationYAngle < 45:
             rotationYAngle = 45
             yDirection *= -1
 
         if rotationYAngle > 135:
             rotationYAngle = 135
-            yDirection *= -1
+            yDirection *= -1"""
+
+        adjRotationY = sin(rotationYAngle)*45 + 90
+
+        cameraHeight = sin(adjRotationY+90) * cameraRadius
+        cameraAdjRadius = abs(cos(adjRotationY+90)) * cameraRadius
 
         cameraPos = glm.vec3(sin(rotationXAngle) * cameraAdjRadius, cameraHeight, cos(rotationXAngle) * cameraAdjRadius)
+        #cameraUp = (sin(rotationZAngle), cos(rotationZAngle), 0)
 
         viewMatrix = glm.lookAt(cameraPos,
                                 cameraFront,
@@ -255,7 +265,7 @@ def main():
 
         particleLookMatrix = glm.mat4(1)
 
-        yRotation = glm.rotate(particleLookMatrix, glm.radians(rotationYAngle+90), (1, 0, 0))
+        yRotation = glm.rotate(particleLookMatrix, glm.radians(adjRotationY+90), (1, 0, 0))
         xRotation = glm.rotate(particleLookMatrix, glm.radians(rotationXAngle), (0, 1, 0))
 
         particleLookMatrix = xRotation * yRotation
@@ -290,10 +300,10 @@ def main():
             beatMaxFFT = [np.max(audioFFT[beatIndexRange]) for beatIndexRange in beatTypeIndices]
             beatTypeMax = [max(beatMax, beatTypeMax[i]) for i, beatMax in enumerate(beatMaxFFT)]
 
-            for i, beatMax in enumerate(beatMaxFFT[:4]):
+            for i, beatMax in enumerate(beatMaxFFT[:3]):
                 if beatMax >= beatTypeMax[i] * beatCutOff[i] and beatMax >= beatTypeMax[i] * beatMinThreshold[i]:
                     beatCutOff[i] = 1
-                    cameraAccel = 20
+                    cameraAccel = 40
                     beat = True
                 else:
                     beatCutOff[i] *= beatDecayRate[i]
@@ -349,7 +359,7 @@ def main():
         ft = e - s
         times.append(ft)
 
-    print(sum(times) / len(times))
+    print("Average ms Per Frame", sum(times) / len(times))
 
 
 if __name__ == "__main__":
