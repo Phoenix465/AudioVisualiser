@@ -48,7 +48,7 @@ def main():
 
     glUseProgram(blurShader)
     uniformHorizontal = glGetUniformLocation(blurShader, 'horizontal')
-    #uniformShouldBlur = glGetUniformLocation(blurShader, 'shouldBlur')
+    uniformShouldBlur = glGetUniformLocation(blurShader, 'shouldBlur')
 
     glUseProgram(shader)
 
@@ -306,9 +306,12 @@ def main():
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         blurCount = 2
+
         glUseProgram(blurShader)
         horizontal = True
         first_iteration = True
+
+        glUniform1i(uniformShouldBlur, blurCount != 0)
 
         for i in range(2):
             glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i])
@@ -318,6 +321,7 @@ def main():
             glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[int(horizontal)])
             glUniform1i(uniformHorizontal, horizontal)
             glBindTexture(GL_TEXTURE_2D, first_iteration and fboTexture or pingpongColourBuffers[int(not horizontal)])
+
             screenQuad.draw()
 
             horizontal = not horizontal
@@ -326,7 +330,7 @@ def main():
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_2D, pingpongColourBuffers[int(not horizontal)])
+        glBindTexture(GL_TEXTURE_2D, blurCount != 0 and pingpongColourBuffers[int(not horizontal)] or fboTexture)
         screenQuad.draw()
         glBindTexture(GL_TEXTURE_2D, 0)
 
