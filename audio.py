@@ -1,3 +1,5 @@
+import wave
+
 import numpy as np
 from dataclasses import dataclass
 
@@ -29,3 +31,4 @@ def audioDataToArray(soundData, sampleWidth, channels):
 class SoundData:
     data: bytes
     read: bool
+    waveFile: wave.Wave_read

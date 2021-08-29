@@ -38,12 +38,19 @@ def main():
     pygame.display.flip()
 
     shader = ShaderLoader.compileShaders("shaders/vertex.shader", "shaders/fragment.shader")
+    blurShader = ShaderLoader.compileShaders("shaders/blurvertex.shader", "shaders/blurfragment.shader")
     glUseProgram(shader)
 
     uniformModel = glGetUniformLocation(shader, 'uniform_Model')
     uniformView = glGetUniformLocation(shader, 'uniform_View')
     uniformProjection = glGetUniformLocation(shader, 'uniform_Projection')
     uniformLookAtMatrix = glGetUniformLocation(shader, 'lookAtMatrix')
+
+    glUseProgram(blurShader)
+    uniformHorizontal = glGetUniformLocation(blurShader, 'horizontal')
+    #uniformShouldBlur = glGetUniformLocation(blurShader, 'shouldBlur')
+
+    glUseProgram(shader)
 
     # ----- OpenGL Settings -----
     print(f"OpenGL Version: {glGetString(GL_VERSION).decode()}")
@@ -122,7 +129,8 @@ def main():
 
     soundDataHolder = audio.SoundData(
         data=b'',
-        read=False
+        read=False,
+        waveFile=soundFile
     )
 
     def callback(in_data, frame_count, time_info, status):
@@ -131,7 +139,10 @@ def main():
         soundDataHolder.data = data
         soundDataHolder.read = len(data) < frame_count * sampleWidth * channels
 
-        return (data, pyaudio.paContinue)
+        if soundDataHolder.read:
+            soundDataHolder.waveFile.rewind()
+
+        return data, pyaudio.paContinue
 
     soundStream = pyAudioObj.open(
         format=pyaudio.get_format_from_width(soundFile.getsampwidth()),
@@ -142,6 +153,39 @@ def main():
     )
 
     soundStream.start_stream()
+
+    # ----- Blur Effect -----
+    screenFBO = glGenFramebuffers(1)
+    glBindFramebuffer(GL_FRAMEBUFFER, screenFBO)
+
+    fboTexture = glGenTextures(1)
+    glBindTexture(GL_TEXTURE_2D, fboTexture)
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, displayV.x, displayV.y, 0, GL_RGBA, GL_FLOAT, None)
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fboTexture, 0)
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0)
+    glBindTexture(GL_TEXTURE_2D, 0)
+
+    pingpongFBO = glGenFramebuffers(2)
+    pingpongColourBuffers = glGenTextures(2)
+
+    for i in range(2):
+        glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i])
+        glBindTexture(GL_TEXTURE_2D, pingpongColourBuffers[i])
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, displayV.x, displayV.y, 0, GL_RGBA, GL_FLOAT, None)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongColourBuffers[i], 0)
+
+    screenQuad = GameObjects.ScreenQuad()
 
     times = [0]
     running = True
@@ -155,8 +199,6 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         cameraCurrentVelocity += cameraAccel
         cameraAccel = 0
@@ -209,12 +251,6 @@ def main():
 
         particleLookMatrix = xRotation * yRotation
 
-        glUniformMatrix4fv(uniformView, 1, GL_FALSE,
-                           glm.value_ptr(viewMatrix))
-
-        glUniformMatrix4fv(uniformLookAtMatrix, 1, GL_FALSE,
-                           glm.value_ptr(particleLookMatrix))
-
         beat = False
         averageAmplitude = 0
 
@@ -242,7 +278,7 @@ def main():
             for i, beatMax in enumerate(beatMaxFFT[:3]):
                 if beatMax >= beatTypeMax[i] * beatCutOff[i] and beatMax >= beatTypeMax[i] * beatMinThreshold[i]:
                     beatCutOff[i] = 1
-                    cameraAccel = 40
+                    cameraAccel = 35
                     beat = True
                 else:
                     beatCutOff[i] *= beatDecayRate[i]
@@ -253,7 +289,46 @@ def main():
 
         #  At 3000 particles, 4ms to sort, 3ms to draw
         particleEmitterObject.sort(cameraPos)
+
+        glBindFramebuffer(GL_FRAMEBUFFER, screenFBO)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        glUseProgram(shader)
+
+        glUniformMatrix4fv(uniformView, 1, GL_FALSE,
+                           glm.value_ptr(viewMatrix))
+
+        glUniformMatrix4fv(uniformLookAtMatrix, 1, GL_FALSE,
+                           glm.value_ptr(particleLookMatrix))
+
         particleEmitterObject.draw()
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+        blurCount = 2
+        glUseProgram(blurShader)
+        horizontal = True
+        first_iteration = True
+
+        for i in range(2):
+            glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i])
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+        for i in range(blurCount):
+            glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[int(horizontal)])
+            glUniform1i(uniformHorizontal, horizontal)
+            glBindTexture(GL_TEXTURE_2D, first_iteration and fboTexture or pingpongColourBuffers[int(not horizontal)])
+            screenQuad.draw()
+
+            horizontal = not horizontal
+            first_iteration = False
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_2D, pingpongColourBuffers[int(not horizontal)])
+        screenQuad.draw()
+        glBindTexture(GL_TEXTURE_2D, 0)
 
         fps = str(floor(clock.get_fps()))
 

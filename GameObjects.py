@@ -62,7 +62,8 @@ class ParticleEmitter:
                 "scale": 0.05,
                 "scaleMinLimit": 0.05,
                 "scaleMaxLimit": 1,
-                "scaleDownVelocityPS": 0.5,
+                "scaleBeatSize": 0.25,
+                "scaleDownVelocityPS": 0.6,
                 "scaleBeatJump": 0.05,
                 "color": [*colorsys.hsv_to_rgb(random(), 1, 1), 1],
                 "rotation": random() * 360,
@@ -75,7 +76,8 @@ class ParticleEmitter:
         self.VBO = VBOHandler.VBOParticle(shader, self.circleVertices, self.particles)
 
         self.updateCount = 0
-        self.currentColour = [*colorsys.hsv_to_rgb(random(), 1, 1), 1]
+        self.changeColourCount = int(random()*360)
+        self.currentColour = [*colorsys.hsv_to_rgb(self.changeColourCount/360, 1, 1), 1]
         self.canChangeColour = False
         self.lastBeatTime = 0
         self.maxDist = 10
@@ -115,9 +117,10 @@ class ParticleEmitter:
 
         if currentTime - self.lastBeatTime > 80 and self.canChangeColour:  # ms btw
             self.canChangeColour = False
-            self.currentColour = [*colorsys.hsv_to_rgb(random(), 1, 1), 1]
+            self.changeColourCount += 20
+            self.currentColour = [*colorsys.hsv_to_rgb(self.changeColourCount/360, 1, 1), 1]
 
-        particleCount = particleCountSpawn * (self.updateCount % 4 == 0) + 200 * push
+        particleCount = particleCountSpawn * (self.updateCount % 4 == 0) + 150 * push
         chosenParticles = self.particleOrder[:particleCount]
         self.particleOrder = self.particleOrder[particleCount:] + self.particleOrder[:particleCount]
 
@@ -144,6 +147,9 @@ class ParticleEmitter:
             if push:
                 particle["scale"] += particle["scaleBeatJump"]
 
+                if particle["distanceToCentre"] < 0.25:
+                    particle["scale"] = particle["scaleBeatSize"]
+
             particle["scale"] = max(particle["scaleMinLimit"], particle["scale"])
             particle["scale"] = min(particle["scaleMaxLimit"], particle["scale"])
 
@@ -151,7 +157,7 @@ class ParticleEmitter:
             particle["distanceToCentre"] += particle["velocityUnitMultiplier"]
             alphaVal = 1-(particle["distanceToCentre"]/self.maxDist)
 
-            particle["color"][3] = alphaVal
+            particle["color"][3] = alphaVal * 0.8
 
         self.VBO.update()
 
