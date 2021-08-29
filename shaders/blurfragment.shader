@@ -4,35 +4,39 @@ out vec4 FragColor;
 in vec2 TexCoords;
 
 uniform sampler2D image;
-uniform vec3 resolution;
+
+uniform bool horizontal;
+uniform float weight[5] = float[] (0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
+uniform bool shouldBlur;
 
 void main()
 {
-     float Pi = 6.28318530718; // Pi*2
-    
-    // GAUSSIAN BLUR SETTINGS {{{
-    float Directions = 16.0; // BLUR DIRECTIONS (Default 16.0 - More is better but slower)
-    float Quality = 3.0; // BLUR QUALITY (Default 4.0 - More is better but slower)
-    float Size = 8.0; // BLUR SIZE (Radius)
-    // GAUSSIAN BLUR SETTINGS }}}
-   
-    vec2 Radius = Size/resolution.xy;
-    
-    // Normalized pixel coordinates (from 0 to 1)
-    vec2 uv = TexCoords/resolution.xy;
-    // Pixel colour
-    vec4 Color = texture(image, TexCoords);
-    
-    // Blur calculations
-    for( float d=0.0; d<Pi; d+=Pi/Directions)
+    if (shouldBlur)
     {
-		for(float i=1.0/Quality; i<=1.0; i+=1.0/Quality)
+        vec2 tex_offset = 1.0 / textureSize(image, 0); // gets size of single texel
+        vec3 result = texture(image, TexCoords).rgb * weight[0]; // current fragment's contribution
+        if(horizontal)
         {
-			Color += texture( image, TexCoords+vec2(cos(d),sin(d))*Radius*i);
+            for(int i = 1; i < 5; ++i)
+            {
+                result += texture(image, TexCoords + vec2(tex_offset.x * i, 0.0)).rgb * weight[i];
+                result += texture(image, TexCoords - vec2(tex_offset.x * i, 0.0)).rgb * weight[i];
+            }
         }
+        else
+        {
+            for(int i = 1; i < 5; ++i)
+            {
+                result += texture(image, TexCoords + vec2(0.0, tex_offset.y * i)).rgb * weight[i];
+                result += texture(image, TexCoords - vec2(0.0, tex_offset.y * i)).rgb * weight[i];
+            }
+        }
+        FragColor = vec4(result, 1.0);
     }
-    
-    // Output to screen
-    //Color /= Quality * Directions - 15.0;
-    FragColor = Color;
+
+    else
+    {
+        vec3 result = texture(image, TexCoords).rgb; // current fragment's contribution
+        FragColor = vec4(result, 1.0);
+    }
 }

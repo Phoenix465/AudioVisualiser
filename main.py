@@ -47,8 +47,8 @@ def main():
     uniformLookAtMatrix = glGetUniformLocation(shader, 'lookAtMatrix')
 
     glUseProgram(blurShader)
-    uniformResolution = glGetUniformLocation(shader, 'resolution')
-    glUniform3iv(uniformResolution, 1, glm.value_ptr(displayV))
+    uniformHorizontal = glGetUniformLocation(blurShader, 'horizontal')
+    uniformShouldBlur = glGetUniformLocation(blurShader, 'shouldBlur')
 
     glUseProgram(shader)
 
@@ -171,6 +171,19 @@ def main():
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0)
     glBindTexture(GL_TEXTURE_2D, 0)
+
+    pingpongFBO = glGenFramebuffers(2)
+    pingpongColourBuffers = glGenTextures(2)
+
+    for i in range(2):
+        glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i])
+        glBindTexture(GL_TEXTURE_2D, pingpongColourBuffers[i])
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, displayV.x, displayV.y, 0, GL_RGBA, GL_FLOAT, None)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongColourBuffers[i], 0)
 
     screenQuad = GameObjects.ScreenQuad()
 
@@ -295,11 +308,29 @@ def main():
         blurCount = 2
 
         glUseProgram(blurShader)
+        horizontal = True
+        first_iteration = True
+
+        glUniform1i(uniformShouldBlur, blurCount != 0)
+
+        for i in range(2):
+            glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i])
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+        for i in range(blurCount):
+            glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[int(horizontal)])
+            glUniform1i(uniformHorizontal, horizontal)
+            glBindTexture(GL_TEXTURE_2D, first_iteration and fboTexture or pingpongColourBuffers[int(not horizontal)])
+
+            screenQuad.draw()
+
+            horizontal = not horizontal
+            first_iteration = False
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_2D, fboTexture)
+        glBindTexture(GL_TEXTURE_2D, blurCount != 0 and pingpongColourBuffers[int(not horizontal)] or fboTexture)
         screenQuad.draw()
         glBindTexture(GL_TEXTURE_2D, 0)
 
