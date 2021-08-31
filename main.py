@@ -12,6 +12,7 @@ from pygame import DOUBLEBUF, OPENGL
 import GameObjects
 import ShaderLoader
 import audio
+import blurArrayHandler
 import gamePaths
 from degreesMath import *
 
@@ -48,7 +49,8 @@ def main():
 
     glUseProgram(blurShader)
     uniformHorizontal = glGetUniformLocation(blurShader, 'horizontal')
-    uniformShouldBlur = glGetUniformLocation(blurShader, 'shouldBlur')
+    uniformBlurRange = glGetUniformLocation(blurShader, 'blurRange')
+    uniformWeightArray = glGetUniformLocation(blurShader, 'weight')
 
     glUseProgram(shader)
 
@@ -185,6 +187,8 @@ def main():
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongColourBuffers[i], 0)
 
+    blurKernel = blurArrayHandler.BlurKernel(0)
+
     screenQuad = GameObjects.ScreenQuad()
 
     times = [0]
@@ -192,6 +196,7 @@ def main():
     clock = pygame.time.Clock()
 
     blurCount = 0
+    stopUpdate = False
 
     while running:
         deltaT = clock.tick(60)
@@ -204,19 +209,25 @@ def main():
 
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_e:
-                    blurCount += 2
+                    #blurCount += 2
+                    blurKernel.updateKernel(blurKernel.pixelRange + 1)
 
                 elif event.key == pygame.K_q:
-                    blurCount = max(blurCount-2, 0)
+                    blurKernel.updateKernel(blurKernel.pixelRange - 1)
+                    #blurCount = max(blurCount-2, 0)
 
-        cameraCurrentVelocity += cameraAccel
-        cameraAccel = 0
-        cameraCurrentVelocity *= cameraVelocityDecay
-        cameraCurrentVelocity = max(cameraCurrentVelocity, cameraMinVelocity)
+                elif event.key == pygame.K_SPACE:
+                    stopUpdate = not stopUpdate
 
-        rotationXAngle += deltaT / 1000 * cameraCurrentVelocity
-        rotationYAngle += deltaT / 1000 * 45 * yDirection
-        #rotationZAngle += deltaT / 1000 * 5
+        if not stopUpdate:
+            cameraCurrentVelocity += cameraAccel
+            cameraAccel = 0
+            cameraCurrentVelocity *= cameraVelocityDecay
+            cameraCurrentVelocity = max(cameraCurrentVelocity, cameraMinVelocity)
+
+            rotationXAngle += deltaT / 1000 * cameraCurrentVelocity
+            rotationYAngle += deltaT / 1000 * 45 * yDirection
+            #rotationZAngle += deltaT / 1000 * 5
 
         if rotationYAngle > 360:
             rotationYAngle -= 360
@@ -293,11 +304,12 @@ def main():
                     beatCutOff[i] *= beatDecayRate[i]
                     beatCutOff[i] = max(beatCutOff[i], beatMinThreshold[i])
 
-        # At 3000 particles, 23 ms to update
-        particleEmitterObject.update(deltaT, pygame.time.get_ticks(), push=beat, avgAmplitude=averageAmplitude)
+        if not stopUpdate:
+            # At 3000 particles, 23 ms to update
+            particleEmitterObject.update(deltaT, pygame.time.get_ticks(), push=beat, avgAmplitude=averageAmplitude)
 
-        #  At 3000 particles, 4ms to sort, 3ms to draw
-        particleEmitterObject.sort(cameraPos)
+            #  At 3000 particles, 4ms to sort, 3ms to draw
+            particleEmitterObject.sort(cameraPos)
 
         glBindFramebuffer(GL_FRAMEBUFFER, screenFBO)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -318,13 +330,14 @@ def main():
         horizontal = True
         firstIteration = True
 
-        glUniform1i(uniformShouldBlur, blurCount != 0)
+        glUniform1i(uniformBlurRange, blurKernel.pixelRange)
+        glUniform1fv(uniformWeightArray, blurKernel.pixelRange, blurKernel.kernel)
 
         """for i in range(2):
             glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i])
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)"""
 
-        for i in range(blurCount):
+        for i in range(2):
             glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[int(horizontal)])
             glClear(GL_COLOR_BUFFER_BIT)
 
