@@ -12,7 +12,6 @@ from pygame import DOUBLEBUF, OPENGL
 import GameObjects
 import ShaderLoader
 import audio
-import blurArrayHandler
 import gamePaths
 from degreesMath import *
 
@@ -49,8 +48,7 @@ def main():
 
     glUseProgram(blurShader)
     uniformHorizontal = glGetUniformLocation(blurShader, 'horizontal')
-    uniformBlurRange = glGetUniformLocation(blurShader, 'blurRange')
-    uniformWeightArray = glGetUniformLocation(blurShader, 'weight')
+    uniformShouldBlur = glGetUniformLocation(blurShader, 'shouldBlur')
 
     glUseProgram(shader)
 
@@ -73,6 +71,12 @@ def main():
 
     # ----- Camera Settings -----
     cameraRadius = 8
+    cameraMinRadius = 8
+    cameraRadiusDecay = 0.94
+    cameraRadiusVelocity = 0
+    cameraMaxRadius = 8.25
+    cameraRadiusDecreasePS = 2
+
     cameraPos = glm.vec3(0, 0, cameraRadius)
     cameraFront = glm.vec3(0, 0, 0)
     cameraUp = glm.vec3(0, 1, 0)
@@ -187,7 +191,7 @@ def main():
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongColourBuffers[i], 0)
 
-    blurKernel = blurArrayHandler.BlurKernel(0)
+    blurCount = 0
 
     screenQuad = GameObjects.ScreenQuad()
 
@@ -195,7 +199,6 @@ def main():
     running = True
     clock = pygame.time.Clock()
 
-    blurCount = 0
     stopUpdate = False
 
     while running:
@@ -209,25 +212,31 @@ def main():
 
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_e:
-                    #blurCount += 2
-                    blurKernel.updateKernel(blurKernel.pixelRange + 1)
+                    blurCount += 2
 
                 elif event.key == pygame.K_q:
-                    blurKernel.updateKernel(blurKernel.pixelRange - 1)
-                    #blurCount = max(blurCount-2, 0)
+                    blurCount = max(blurCount-2, 0)
 
                 elif event.key == pygame.K_SPACE:
                     stopUpdate = not stopUpdate
 
         if not stopUpdate:
+            """cameraRadiusVelocity *= cameraRadiusDecay
+            cameraRadiusVelocity -= deltaT/1000 * 1
+            cameraRadiusVelocity = max(cameraRadiusVelocity, -1)
+            cameraRadius = max(min(cameraMaxRadius, cameraRadius + (deltaT/1000)*cameraRadiusVelocity), cameraMinRadius)
+            print(cameraRadius)"""
+
             cameraCurrentVelocity += cameraAccel
             cameraAccel = 0
             cameraCurrentVelocity *= cameraVelocityDecay
             cameraCurrentVelocity = max(cameraCurrentVelocity, cameraMinVelocity)
 
-            rotationXAngle += deltaT / 1000 * cameraCurrentVelocity
-            rotationYAngle += deltaT / 1000 * 45 * yDirection
+            #rotationXAngle += deltaT / 1000 * cameraCurrentVelocity
+            #rotationYAngle += deltaT / 1000 * 45 * yDirection
             #rotationZAngle += deltaT / 1000 * 5
+
+            cameraRadius = max(min(cameraRadius - (deltaT/1000) * cameraRadiusDecreasePS, cameraMaxRadius), cameraMinRadius)
 
         if rotationYAngle > 360:
             rotationYAngle -= 360
@@ -299,6 +308,7 @@ def main():
                 if beatMax >= beatTypeMax[i] * beatCutOff[i] and beatMax >= beatTypeMax[i] * beatMinThreshold[i]:
                     beatCutOff[i] = 1
                     cameraAccel = 35
+                    #cameraRadiusVelocity = 3
                     beat = True
                 else:
                     beatCutOff[i] *= beatDecayRate[i]
@@ -330,14 +340,13 @@ def main():
         horizontal = True
         firstIteration = True
 
-        glUniform1i(uniformBlurRange, blurKernel.pixelRange)
-        glUniform1fv(uniformWeightArray, blurKernel.pixelRange, blurKernel.kernel)
-
-        """for i in range(2):
-            glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i])
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)"""
+        glUniform1i(uniformShouldBlur, blurCount != 0)
 
         for i in range(2):
+            glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i])
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+        for i in range(blurCount):
             glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[int(horizontal)])
             glClear(GL_COLOR_BUFFER_BIT)
 
