@@ -24,3 +24,8 @@ class PathHolder:
         self.uiVertexPath = path.join(self.shaderPath, "UIvertex.shader")
         self.uiFragmentPath = path.join(self.shaderPath, "UIfragment.shader")
         self.uiShaderPaths = (self.uiVertexPath, self.uiFragmentPath)
+
+        self.fontsPath = path.join(self.resources, "fonts")
+
+        self.allerPath = path.join(self.fontsPath, "Aller")
+        self.mainFont = path.join(self.allerPath, "Aller_Lt.ttf")

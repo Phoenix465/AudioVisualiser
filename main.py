@@ -14,6 +14,7 @@ import ShaderLoader
 import audio
 import gamePaths
 import numberShower
+import quadHandler
 from degreesMath import *
 
 
@@ -65,7 +66,7 @@ def main():
     glEnable(GL_DEPTH_TEST)
     glEnable(GL_MULTISAMPLE)
     glEnable(GL_BLEND)
-    glBlendFunc(GL_SRC_ALPHA, GL_SRC_ALPHA)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
     glDisable(GL_CULL_FACE)
     # glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
 
@@ -133,7 +134,8 @@ def main():
     soundDataHolder = audio.SoundData(
         data=b'',
         read=False,
-        waveFile=soundFile
+        waveFile=soundFile,
+        rewind=False
     )
 
     def callback(in_data, frame_count, time_info, status):
@@ -143,7 +145,8 @@ def main():
         soundDataHolder.read = len(data) < frame_count * sampleWidth * channels
 
         if soundDataHolder.read:
-            soundDataHolder.waveFile.rewind()
+            print("Finished")
+            soundDataHolder.rewind = True
 
         return data, pyaudio.paContinue
 
@@ -197,6 +200,8 @@ def main():
                                            maxDigitLength=3,
                                            defaultNumber="000")
 
+    updateTime = quadHandler.TextQuad(uiShader, "Update Time: 0ms", GamePaths.mainFont, glm.vec2(displayV.x-5, 5)/displayV, 0.05, displayV, (255, 255, 255, 255), isTopRight=True)
+
     blurCount = 0
 
     screenQuad = GameObjects.ScreenQuad()
@@ -206,10 +211,13 @@ def main():
     clock = pygame.time.Clock()
 
     stopUpdate = False
+    frameCount = 0
 
     while running:
         deltaT = clock.tick(60)
         s = time() * 1000
+
+        frameCount += 1
 
         keyPressed = pygame.key.get_pressed()
         for event in pygame.event.get():
@@ -225,6 +233,9 @@ def main():
 
                 elif event.key == pygame.K_SPACE:
                     stopUpdate = not stopUpdate
+
+                elif event.key == pygame.K_r:
+                    soundDataHolder.waveFile.rewind()
 
         if not stopUpdate:
             cameraCurrentVelocity += cameraAccel
@@ -280,6 +291,12 @@ def main():
 
         beat = False
         averageAmplitude = 0
+
+        if soundDataHolder.rewind:
+            print("Rewinding")
+
+            soundDataHolder.rewind = False
+            soundDataHolder.waveFile.rewind()
 
         if len(soundDataHolder.data) > 0 and not soundDataHolder.read:
             #  https://github.com/WarrenWeckesser/wavio/blob/cff688a318173a2bc700297a30a70858730b901f/wavio.py
@@ -368,6 +385,10 @@ def main():
         fpsCounter.setNumber(fps + "-"*(3-len(fps)))
         fpsCounter.draw()
 
+        if frameCount % 10 == 0:
+            tempTimes = times[-60:]
+            updateTime.changeText(f"Update Time: {floor(sum(tempTimes)/len(tempTimes))}ms")
+        updateTime.draw()
         pygame.display.flip()
 
         e = time() * 1000

@@ -75,9 +75,9 @@ def loadAnimation(imageFirstPath, returnImage=False):  # Example: menu-back@2x.p
 
 
 def GenFontSurface(text, fontPath, fontLoad=None, customColour=None):
-    font = fontLoad or pygame.font.Font(fontPath, 64)
+    font = fontLoad or pygame.font.Font(fontPath, 128)
     textSurface = font.render(text, True, customColour or (255, 255, 255, 255))
-
+    pygame.image.save(textSurface, "test.png")
     return textSurface
 
 
@@ -96,13 +96,17 @@ def GenTextureForText(text, fontPath, fontLoad=None):
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, textureData)
 
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
-    glGenerateMipmap(GL_TEXTURE_2D)
 
-    # glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
+    #glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
+
+    glBindTexture(GL_TEXTURE_2D, 0)
 
     return textureId
 
@@ -135,6 +139,7 @@ def GetImageScaleSize(image, scale, displayV, heightWidthScale=True, tuple=False
 
 def GenTextTextureSize(title, heightScale, displayV, fontPath, fontLoad=None, customColour=None):
     titleRender = GenFontSurface(title, fontPath, fontLoad=fontLoad, customColour=customColour)  # 22/90 height
+
     titleHeight = heightScale
     titleHeightP = titleHeight * displayV.y
     titleRatio = titleRender.get_width() / titleRender.get_height()
