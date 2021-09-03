@@ -13,6 +13,7 @@ import GameObjects
 import ShaderLoader
 import audio
 import gamePaths
+import numberShower
 from degreesMath import *
 
 
@@ -37,8 +38,9 @@ def main():
 
     pygame.display.flip()
 
-    shader = ShaderLoader.compileShaders("shaders/vertex.shader", "shaders/fragment.shader")
-    blurShader = ShaderLoader.compileShaders("shaders/blurvertex.shader", "shaders/blurfragment.shader")
+    shader = ShaderLoader.compileShaders(*GamePaths.defaultShaderPaths)
+    blurShader = ShaderLoader.compileShaders(*GamePaths.blurShaderPaths)
+    uiShader = ShaderLoader.compileShaders(*GamePaths.uiShaderPaths)
     glUseProgram(shader)
 
     uniformModel = glGetUniformLocation(shader, 'uniform_Model')
@@ -64,19 +66,14 @@ def main():
     glEnable(GL_MULTISAMPLE)
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_SRC_ALPHA)
-    # glDisable(GL_CULL_FACE)
+    glDisable(GL_CULL_FACE)
+    # glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
 
     glClearColor(0, 0, 0, 1.0)
-    # glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+    #glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
 
     # ----- Camera Settings -----
     cameraRadius = 8
-    cameraMinRadius = 8
-    cameraRadiusDecay = 0.94
-    cameraRadiusVelocity = 0
-    cameraMaxRadius = 8.25
-    cameraRadiusDecreasePS = 2
-
     cameraPos = glm.vec3(0, 0, cameraRadius)
     cameraFront = glm.vec3(0, 0, 0)
     cameraUp = glm.vec3(0, 1, 0)
@@ -191,6 +188,15 @@ def main():
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongColourBuffers[i], 0)
 
+    # ----- UI -----
+    fpsCounter = numberShower.NumberShower(uiShader,
+                                           GamePaths.scoreBasePath,
+                                           60 / displayV.y,
+                                           glm.vec2(1-((3*10+2)/768), 1 - 62 / 768),
+                                           displayV,
+                                           maxDigitLength=3,
+                                           defaultNumber="000")
+
     blurCount = 0
 
     screenQuad = GameObjects.ScreenQuad()
@@ -221,22 +227,14 @@ def main():
                     stopUpdate = not stopUpdate
 
         if not stopUpdate:
-            """cameraRadiusVelocity *= cameraRadiusDecay
-            cameraRadiusVelocity -= deltaT/1000 * 1
-            cameraRadiusVelocity = max(cameraRadiusVelocity, -1)
-            cameraRadius = max(min(cameraMaxRadius, cameraRadius + (deltaT/1000)*cameraRadiusVelocity), cameraMinRadius)
-            print(cameraRadius)"""
-
             cameraCurrentVelocity += cameraAccel
             cameraAccel = 0
             cameraCurrentVelocity *= cameraVelocityDecay
             cameraCurrentVelocity = max(cameraCurrentVelocity, cameraMinVelocity)
 
-            #rotationXAngle += deltaT / 1000 * cameraCurrentVelocity
-            #rotationYAngle += deltaT / 1000 * 45 * yDirection
+            rotationXAngle += deltaT / 1000 * cameraCurrentVelocity
+            rotationYAngle += deltaT / 1000 * 45 * yDirection
             #rotationZAngle += deltaT / 1000 * 5
-
-            cameraRadius = max(min(cameraRadius - (deltaT/1000) * cameraRadiusDecreasePS, cameraMaxRadius), cameraMinRadius)
 
         if rotationYAngle > 360:
             rotationYAngle -= 360
@@ -308,7 +306,6 @@ def main():
                 if beatMax >= beatTypeMax[i] * beatCutOff[i] and beatMax >= beatTypeMax[i] * beatMinThreshold[i]:
                     beatCutOff[i] = 1
                     cameraAccel = 35
-                    #cameraRadiusVelocity = 3
                     beat = True
                 else:
                     beatCutOff[i] *= beatDecayRate[i]
@@ -366,6 +363,10 @@ def main():
         glBindTexture(GL_TEXTURE_2D, 0)
 
         fps = str(floor(clock.get_fps()))
+
+        glUseProgram(uiShader)
+        fpsCounter.setNumber(fps + "-"*(3-len(fps)))
+        fpsCounter.draw()
 
         pygame.display.flip()
 

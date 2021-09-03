@@ -1,14 +1,13 @@
 import ctypes
 
-import glm
 import numpy as np
 from OpenGL.GL import glGenBuffers, glGetAttribLocation, glBindBuffer, glBufferData, glDrawElementsInstanced, \
     glBindVertexArray, glGenVertexArrays, glVertexAttribPointer, glDrawArrays, glBufferSubData, \
-    glEnableVertexAttribArray, \
+    glEnableVertexAttribArray, glBindTexture, glDrawElements, glEnable, \
     glVertexAttribDivisor, GL_STATIC_DRAW, GL_TRIANGLE_STRIP, GL_DYNAMIC_DRAW, GL_UNSIGNED_INT, GL_ELEMENT_ARRAY_BUFFER, \
     GL_ARRAY_BUFFER, \
     GL_FLOAT, GL_FALSE, \
-    GL_TRIANGLES
+    GL_TRIANGLES, GL_TEXTURE_2D
 
 
 class VBOScreen:
@@ -142,3 +141,81 @@ class VBOParticle:
             polygon.extend(vertex.to_list())
 
         return np.array(polygon, dtype=np.float32)
+
+
+class VBOImage:
+    def __init__(self, shader, vertices, colours, textureCoords, texture):
+        self.vertices = vertices
+        self.colours = colours
+        self.textureCoords = textureCoords
+
+        self.texture = texture
+
+        self.vertexData = self.serializeData()
+
+        indices = []
+        for i in range(len(vertices) - 2):
+            indices.extend([
+                0,
+                i + 1,
+                i + 2
+            ])
+
+        self.indices = np.array(indices, dtype=np.uint32)
+
+        self.VAO = glGenVertexArrays(1)
+        self.VBO = glGenBuffers(1)  # Vertex Buffer Object
+        self.EBO = glGenBuffers(1)  # Element Buffer Object
+
+        glBindVertexArray(self.VAO)
+
+        glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
+        glBufferData(GL_ARRAY_BUFFER, 4 * len(self.vertexData), self.vertexData, GL_DYNAMIC_DRAW)
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, 4 * len(self.indices), self.indices, GL_STATIC_DRAW)
+
+        self.vertexStride = (2 + 4 + 2) * 4
+
+        self.positionLocation = glGetAttribLocation(shader, "position")
+        glVertexAttribPointer(self.positionLocation, 2, GL_FLOAT, GL_FALSE, self.vertexStride, ctypes.c_void_p(0))
+        glEnableVertexAttribArray(self.positionLocation)
+
+        self.colourLocation = glGetAttribLocation(shader, "colour")
+        glVertexAttribPointer(self.colourLocation, 4, GL_FLOAT, GL_FALSE, self.vertexStride, ctypes.c_void_p(8))
+        glEnableVertexAttribArray(self.colourLocation)
+
+        self.texCoordsLocation = glGetAttribLocation(shader, "textureCoords")
+        glVertexAttribPointer(self.texCoordsLocation, 2, GL_FLOAT, GL_FALSE, self.vertexStride, ctypes.c_void_p(24))
+        glEnableVertexAttribArray(self.texCoordsLocation)
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
+        glBindVertexArray(0)
+
+    def update(self):
+        glBindVertexArray(self.VAO)
+
+        self.vertexData = self.serializeData()
+
+        glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
+        glBufferSubData(GL_ARRAY_BUFFER, 0, len(self.vertexData) * 4, self.vertexData)
+
+        glBindVertexArray(0)
+
+    def serializeData(self):
+        combinedData = []
+
+        for i in range(len(self.vertices)):
+            combinedData.extend(self.vertices[i].to_list())
+            combinedData.extend(self.colours[i])
+            combinedData.extend(self.textureCoords[i])
+
+        return np.array(combinedData, dtype=np.float32)
+
+    def draw(self):
+        glEnable(GL_TEXTURE_2D)
+        glBindTexture(GL_TEXTURE_2D, self.texture)
+
+        glBindVertexArray(self.VAO)
+        glDrawElements(GL_TRIANGLES, len(self.indices), GL_UNSIGNED_INT, None)
+        glBindVertexArray(0)
