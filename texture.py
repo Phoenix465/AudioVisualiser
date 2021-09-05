@@ -77,7 +77,7 @@ def loadAnimation(imageFirstPath, returnImage=False):  # Example: menu-back@2x.p
 def GenFontSurface(text, fontPath, fontLoad=None, customColour=None):
     font = fontLoad or pygame.font.Font(fontPath, 128)
     textSurface = font.render(text, True, customColour or (255, 255, 255, 255))
-    pygame.image.save(textSurface, "test.png")
+
     return textSurface
 
 

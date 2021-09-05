@@ -1,4 +1,3 @@
-import wave
 from math import floor
 from time import time
 
@@ -8,6 +7,7 @@ import pyaudio
 import pygame
 from OpenGL.GL import *
 from pygame import DOUBLEBUF, OPENGL
+from pygame import GL_MULTISAMPLEBUFFERS, GL_MULTISAMPLESAMPLES
 
 import GameObjects
 import ShaderLoader
@@ -26,9 +26,16 @@ def main():
     pygame.init()
     pygame.mixer.init()
     GamePaths = gamePaths.PathHolder()
+    audioFiles = audio.InitializeMusicDirectory(GamePaths.musicPath, GamePaths.oldMP3Files, GamePaths.converterPath, GamePaths.ffmpegPath, GamePaths.ffprobePath)
+    for i in range(len(audioFiles)):
+        if audioFiles[i] in GamePaths.songPath:
+            audioFiles.insert(0, audioFiles.pop(i))
 
     display = 1366, 768
     displayV = glm.vec2(display)
+
+    pygame.display.gl_set_attribute(GL_MULTISAMPLEBUFFERS, 1)
+    pygame.display.gl_set_attribute(GL_MULTISAMPLESAMPLES, 2)
 
     screen = pygame.display.set_mode(display, DOUBLEBUF | OPENGL)
 
@@ -103,10 +110,8 @@ def main():
     # ---- Sound Stuff -----
     chunkSize = 1024
 
-    soundFile = wave.open(GamePaths.songPath, "rb")
-    sampleWidth = soundFile.getsampwidth()
-    frameRate = soundFile.getframerate()
-    channels = soundFile.getnchannels()
+    musicHandler = audio.SoundHandler(GamePaths.songPath)
+    musicUIHandler = audio.SoundUIHandler(uiShader, GamePaths.musicPath, musicHandler, GamePaths.mainFont, displayV, audioFiles)
 
     beatTypeRanges = (
         (20, 60),  # Sub Bass
@@ -125,40 +130,9 @@ def main():
     beatCutOff = [0, 0, 0, 0, 0, 0, 0]
     beatDecayRate = [0.965 for _ in range(len(beatTypeRanges))]
 
-    pyAudioObj = pyaudio.PyAudio()
+    frequencies = musicHandler.frameRate * np.arange(chunkSize / 2) / chunkSize
 
-    frequencies = frameRate * np.arange(chunkSize / 2) / chunkSize
-
-    maxY = 2.0 ** (pyAudioObj.get_sample_size(pyaudio.paInt16) * 8 - 1)
-
-    soundDataHolder = audio.SoundData(
-        data=b'',
-        read=False,
-        waveFile=soundFile,
-        rewind=False
-    )
-
-    def callback(in_data, frame_count, time_info, status):
-        data = soundFile.readframes(frame_count)
-
-        soundDataHolder.data = data
-        soundDataHolder.read = len(data) < frame_count * sampleWidth * channels
-
-        if soundDataHolder.read:
-            print("Finished")
-            soundDataHolder.rewind = True
-
-        return data, pyaudio.paContinue
-
-    soundStream = pyAudioObj.open(
-        format=pyaudio.get_format_from_width(soundFile.getsampwidth()),
-        channels=soundFile.getnchannels(),
-        rate=soundFile.getframerate(),
-        output=True,
-        stream_callback=callback
-    )
-
-    soundStream.start_stream()
+    maxY = 2.0 ** (musicHandler.pyAudioObj.get_sample_size(pyaudio.paInt16) * 8 - 1)
 
     # ----- Blur Effect -----
     screenFBO = glGenFramebuffers(1)
@@ -226,7 +200,7 @@ def main():
 
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_e:
-                    blurCount += 2
+                    blurCount = min(blurCount+2, 20)
 
                 elif event.key == pygame.K_q:
                     blurCount = max(blurCount-2, 0)
@@ -235,7 +209,19 @@ def main():
                     stopUpdate = not stopUpdate
 
                 elif event.key == pygame.K_r:
-                    soundDataHolder.waveFile.rewind()
+                    musicHandler.changeMusic(GamePaths.songPath)
+
+                elif event.key == pygame.K_s:
+                    musicUIHandler.shuffleToggle()
+
+                elif event.key == pygame.K_a:
+                    musicUIHandler.backSong()
+
+                elif event.key == pygame.K_d:
+                    musicUIHandler.nextSong()
+
+                elif event.key == pygame.K_p:
+                    musicUIHandler.togglePause()
 
         if not stopUpdate:
             cameraCurrentVelocity += cameraAccel
@@ -292,21 +278,21 @@ def main():
         beat = False
         averageAmplitude = 0
 
-        if soundDataHolder.rewind:
+        if musicHandler.soundDataHolder.rewind:
             print("Rewinding")
 
-            soundDataHolder.rewind = False
-            soundDataHolder.waveFile.rewind()
+            musicHandler.soundDataHolder.rewind = False
+            musicHandler.changeMusic(GamePaths.songPath)
 
-        if len(soundDataHolder.data) > 0 and not soundDataHolder.read:
+        if len(musicHandler.soundDataHolder.data) > 0 and not musicHandler.soundDataHolder.read:
             #  https://github.com/WarrenWeckesser/wavio/blob/cff688a318173a2bc700297a30a70858730b901f/wavio.py
             #  https://github.com/maxemitchell/portfolio/blob/master/src/pages/code_art/thanksgiving_break/index.js
             #  https://github.com/maxemitchell/beat-detection-python/blob/master/beat-detector.py
 
-            soundDataHolder.read = True
-            soundData = soundDataHolder.data
+            musicHandler.soundDataHolder.read = True
+            soundData = musicHandler.soundDataHolder.data
 
-            audioArrayData = audio.audioDataToArray(soundData, sampleWidth, channels)
+            audioArrayData = audio.audioDataToArray(soundData, musicHandler.sampleWidth, musicHandler.channels)
             audioFFT = np.abs((np.fft.fft(audioArrayData)[:int(len(audioArrayData) / 2)]) / len(audioArrayData))
 
             averageAmplitude = np.average(audioFFT)  # average
@@ -333,7 +319,8 @@ def main():
             particleEmitterObject.update(deltaT, pygame.time.get_ticks(), push=beat, avgAmplitude=averageAmplitude)
 
             #  At 3000 particles, 4ms to sort, 3ms to draw
-            particleEmitterObject.sort(cameraPos)
+            if frameCount % 2 == 0:
+                particleEmitterObject.sort(cameraPos)
 
         glBindFramebuffer(GL_FRAMEBUFFER, screenFBO)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -389,6 +376,10 @@ def main():
             tempTimes = times[-60:]
             updateTime.changeText(f"Update Time: {floor(sum(tempTimes)/len(tempTimes))}ms")
         updateTime.draw()
+
+        musicUIHandler.update(frameCount)
+        musicUIHandler.draw()
+
         pygame.display.flip()
 
         e = time() * 1000
