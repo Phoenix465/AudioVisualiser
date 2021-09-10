@@ -13,12 +13,11 @@ from pydub import AudioSegment
 import quadHandler
 
 
-def InitializeMusicDirectory(musicPath, oldMusicPath, converterPath, ffmpegPath, ffprobePath):
+def InitializeMusicDirectory(musicPath, oldMusicPath, converterPath, ffmpegPath):
     #AudioSegment.convert = overallFfmpegPath
     AudioSegment.converter = converterPath
     AudioSegment.ffmpeg = ffmpegPath
-    AudioSegment.ffprobePath = ffprobePath
-
+   
     audioFiles = []
 
     for file in [f for f in listdir(musicPath) if isfile(join(musicPath, f))]:

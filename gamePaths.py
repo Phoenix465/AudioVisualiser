@@ -1,3 +1,4 @@
+import sys
 from os import path
 
 
@@ -36,10 +37,13 @@ class PathHolder:
         self.songPath = path.join(self.musicPath, "LetTheWindTellYou.wav")
 
         self.ffmpegPath = path.join(self.resources, "ffmpeg")
-        self.ffmpegBinPath = path.join(self.ffmpegPath, "bin")
-        self.converterPath = path.join(self.ffmpegBinPath, "ffmpeg.exe")
-        self.ffmpegPath = path.join(self.ffmpegBinPath, "ffmpeg.exe")
-        self.ffprobePath = path.join(self.ffmpegBinPath, "ffprobe.exe")
+
+        if sys.platform == "win32":
+                self.converterPath = path.join(self.ffmpegPath, "ffmpeg.exe")
+                self.ffmpegPath = path.join(self.ffmpegPath, "ffmpeg.exe")
+        elif sys.platform == "darwin":
+                self.converterPath = path.join(self.ffmpegPath, "ffmpeg")
+                self.ffmpegPath = path.join(self.ffmpegPath, "ffmpeg")
 
 
 

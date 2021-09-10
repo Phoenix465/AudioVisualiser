@@ -26,7 +26,7 @@ def main():
     pygame.init()
     pygame.mixer.init()
     GamePaths = gamePaths.PathHolder()
-    audioFiles = audio.InitializeMusicDirectory(GamePaths.musicPath, GamePaths.oldMP3Files, GamePaths.converterPath, GamePaths.ffmpegPath, GamePaths.ffprobePath)
+    audioFiles = audio.InitializeMusicDirectory(GamePaths.musicPath, GamePaths.oldMP3Files, GamePaths.converterPath, GamePaths.ffmpegPath)
     for i in range(len(audioFiles)):
         if audioFiles[i] in GamePaths.songPath:
             audioFiles.insert(0, audioFiles.pop(i))
