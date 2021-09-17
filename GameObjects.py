@@ -1,14 +1,14 @@
 import colorsys
-from dataclasses import dataclass
 from math import floor
 from random import random
-from time import time
 
 import glm
 
 import VBOHandler
 from degreesMath import *
-import line_profiler_pycharm
+
+
+#import line_profiler_pycharm
 
 
 class ScreenQuad:

@@ -1,13 +1,13 @@
 from math import floor
 from time import time
 
+import glfw
 import glm
 import numpy as np
 import pyaudio
 import pygame
 from OpenGL.GL import *
-from pygame import DOUBLEBUF, OPENGL
-from pygame import GL_MULTISAMPLEBUFFERS, GL_MULTISAMPLESAMPLES
+from PIL import Image
 
 import GameObjects
 import ShaderLoader
@@ -24,6 +24,9 @@ from degreesMath import *
 def main():
     # Initialisation
     pygame.init()
+    if not glfw.init():
+        return
+
     GamePaths = gamePaths.PathHolder()
     audioFiles = audio.InitializeMusicDirectory(GamePaths.musicPath, GamePaths.oldMP3Files, GamePaths.converterPath, GamePaths.ffmpegPath)
     for i in range(len(audioFiles)):
@@ -33,17 +36,27 @@ def main():
     display = 1366, 768
     displayV = glm.vec2(display)
 
-    pygame.display.gl_set_attribute(GL_MULTISAMPLEBUFFERS, 1)
-    pygame.display.gl_set_attribute(GL_MULTISAMPLESAMPLES, 2)
+    window = glfw.create_window(*display, "Audio Visualiser", None, None)
+    screen = pygame.display.set_mode(display)
+    pygame.display.set_caption("Background Image Process Window")
 
-    screen = pygame.display.set_mode(display, DOUBLEBUF | OPENGL)
+    pygame.display.iconify()
 
-    pygame.display.set_caption("Audio Visualiser")
+    if not window:
+        glfw.terminate()
+        return
+    glfw.make_context_current(window)
 
-    iconSurface = pygame.image.load(GamePaths.iconPath)
-    pygame.display.set_icon(iconSurface)
+    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
+    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
+    glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, GL_TRUE)
+    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+    glfw.window_hint(glfw.SAMPLES, 16)
 
-    pygame.display.flip()
+    glfw.window_hint(glfw.RESIZABLE, GL_TRUE)
+
+    icon = Image.open(GamePaths.iconPath)
+    glfw.set_window_icon(window, 1, [icon])
 
     shader = ShaderLoader.compileShaders(*GamePaths.defaultShaderPaths)
     blurShader = ShaderLoader.compileShaders(*GamePaths.blurShaderPaths)
@@ -180,48 +193,59 @@ def main():
     screenQuad = GameObjects.ScreenQuad()
 
     times = [0]
-    running = True
-    clock = pygame.time.Clock()
+    realTimes = [0]
 
     stopUpdate = False
     frameCount = 0
 
-    while running:
-        deltaT = clock.tick(60)
+    currentTime = 0
+
+    keyboardInputData = []
+
+    def keyboardInput(windows, key, scancode, action, mods):
+        keyboardInputData.append((key, scancode, action, mods))
+
+    glfw.set_key_callback(window, keyboardInput)
+
+    while not glfw.window_should_close(window):
+        realS = time() * 1000
+        while glfw.get_time() < currentTime + 1.0 / 60:
+            pass
+
+        deltaT = (glfw.get_time() - currentTime) * 1000
+        currentTime = glfw.get_time()
 
         s = time() * 1000
 
         frameCount += 1
 
-        keyPressed = pygame.key.get_pressed()
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
+        for data in keyboardInputData:
+            if data[2] == 1:  # Key Press
+                if data[0] == ord("E"):
+                    blurCount = min(blurCount + 2, 20)
 
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_e:
-                    blurCount = min(blurCount+2, 20)
+                elif data[0] == ord("Q"):
+                    blurCount = max(blurCount - 2, 0)
 
-                elif event.key == pygame.K_q:
-                    blurCount = max(blurCount-2, 0)
-
-                elif event.key == pygame.K_SPACE:
+                elif data[0] == ord(" "):
                     stopUpdate = not stopUpdate
 
-                elif event.key == pygame.K_r:
+                elif data[0] == ord("R"):
                     musicHandler.changeMusic(musicHandler.songPath)
 
-                elif event.key == pygame.K_s:
+                elif data[0] == ord("S"):
                     musicUIHandler.shuffleToggle()
 
-                elif event.key == pygame.K_a:
+                elif data[0] == ord("A"):
                     musicUIHandler.backSong()
 
-                elif event.key == pygame.K_d:
+                elif data[0] == ord("D"):
                     musicUIHandler.nextSong()
 
-                elif event.key == pygame.K_p:
+                elif data[0] == ord("P"):
                     musicUIHandler.togglePause()
+
+        keyboardInputData = []
 
         if not stopUpdate:
             cameraCurrentVelocity += cameraAccel
@@ -316,7 +340,7 @@ def main():
 
         if not stopUpdate:
             # At 3000 particles, 23 ms to update
-            particleEmitterObject.update(deltaT, pygame.time.get_ticks(), push=beat, avgAmplitude=averageAmplitude)
+            particleEmitterObject.update(deltaT, glfw.get_time()*1000, push=beat, avgAmplitude=averageAmplitude)
 
             #  At 3000 particles, 4ms to sort, 3ms to draw
             if frameCount % 2 == 0:
@@ -366,7 +390,8 @@ def main():
         screenQuad.draw()
         glBindTexture(GL_TEXTURE_2D, 0)
 
-        fps = str(floor(clock.get_fps()))
+        fpsTimes = realTimes[-60:]
+        fps = str(round(1000 / (sum(fpsTimes)/len(fpsTimes)))) if len(realTimes) > 1 else "0"
 
         glUseProgram(uiShader)
         fpsCounter.setNumber(fps + "-"*(3-len(fps)))
@@ -380,13 +405,19 @@ def main():
         musicUIHandler.update(frameCount)
         musicUIHandler.draw()
 
-        pygame.display.flip()
+        glfw.swap_buffers(window)
 
         e = time() * 1000
         ft = e - s
+        realFt = e - realS
+
         times.append(ft)
+        realTimes.append(realFt)
+
+        glfw.poll_events()
 
     print("Average ms Per Frame", sum(times) / len(times))
+    glfw.terminate()
 
 
 if __name__ == "__main__":

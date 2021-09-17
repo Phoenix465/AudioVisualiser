@@ -1,11 +1,8 @@
-import ctypes
 from math import cos as radCos
 from math import pi
 from math import sin as radSin
 
 from glm import vec2
-
-user32 = ctypes.windll.user32
 
 
 def degSin(angle):
@@ -62,7 +59,3 @@ def translate(value, leftMin, leftMax, rightMin, rightMax):
 
     # Convert the 0-1 range into a value in the right range.
     return rightMin + (valueScaled * rightSpan)
-
-
-def getMonitorSize():
-    return user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)

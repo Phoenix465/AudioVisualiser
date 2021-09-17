@@ -1,4 +1,4 @@
-#version 450 core
+#version 330
 uniform mat4 uniform_Model;
 uniform mat4 uniform_View;
 uniform mat4 uniform_Projection;

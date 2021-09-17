@@ -1,4 +1,4 @@
-#version 450 core
+#version 330
 
 in PARTICLEOUT {
     vec4 color;
